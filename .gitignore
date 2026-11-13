@@ -1,0 +1,16 @@
+# Roblox / Rojo
+*.rbxl
+*.rbxlx
+*.rbxl.lock
+*.rbxlx.lock
+sourcemap.json
+
+# Gestores de paquetes (Wally)
+Packages/
+ServerPackages/
+DevPackages/
+
+# Editor / OS
+.vscode/
+.DS_Store
+Thumbs.db
