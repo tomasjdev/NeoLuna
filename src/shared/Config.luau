@@ -7,6 +7,14 @@ Config.StartingCredits = 50
 Config.RegolithValue = 1 -- créditos por unidad de regolito entregada
 Config.MaxDrones = 20
 
+Config.TripDistance = 70 -- studs entre depósito y mina
+
+-- Ganancias mientras el jugador no está.
+Config.Offline = {
+	Rate = 0.5, -- fracción de la producción en línea
+	MaxSeconds = 8 * 60 * 60, -- tope: 8 horas
+}
+
 Config.Drone = {
 	BaseSpeed = 16, -- studs/s
 	BaseCapacity = 5, -- unidades por viaje
@@ -28,6 +36,12 @@ end
 
 function Config.GetCapacity(level)
 	return Config.Drone.BaseCapacity + Config.Upgrades.Capacity.PerLevel * level
+end
+
+-- Créditos por segundo en régimen estable (ida + mina + vuelta por dron).
+function Config.GetIncomePerSecond(state)
+	local tripTime = 2 * Config.TripDistance / Config.GetSpeed(state.Speed) + Config.Drone.MiningTime
+	return state.Drones * Config.GetCapacity(state.Capacity) * Config.RegolithValue / tripTime
 end
 
 -- state = { Credits, Drones, Capacity, Speed }

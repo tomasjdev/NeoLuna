@@ -49,5 +49,24 @@ local function render(state)
 	end
 end
 
+local toast = Instance.new("TextLabel")
+toast.Size = UDim2.fromOffset(420, 44)
+toast.AnchorPoint = Vector2.new(0.5, 0)
+toast.Position = UDim2.new(0.5, 0, 0, 20)
+toast.BackgroundColor3 = Color3.fromRGB(10, 10, 25)
+toast.TextColor3 = Color3.fromRGB(0, 255, 220)
+toast.Font = Enum.Font.Code
+toast.TextSize = 20
+toast.Visible = false
+toast.Parent = gui
+
+remotes:WaitForChild("OfflineEarnings").OnClientEvent:Connect(function(earned)
+	toast.Text = ("Mientras no estabas ganaste %d créditos"):format(earned)
+	toast.Visible = true
+	task.delay(6, function()
+		toast.Visible = false
+	end)
+end)
+
 stateRemote.OnClientEvent:Connect(render)
 requestRemote:FireServer()

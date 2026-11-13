@@ -9,8 +9,8 @@ local Economy = require(script.Parent.Economy)
 local DroneService = {}
 
 local FLY_HEIGHT = 8
-local MINE_POS = Vector3.new(70, FLY_HEIGHT, -40)
 local DEPOT_POS = Vector3.new(0, FLY_HEIGHT, -40)
+local MINE_POS = DEPOT_POS + Vector3.new(Config.TripDistance, 0, 0)
 
 local function makeSite(name, position, color)
 	local part = Instance.new("Part")
