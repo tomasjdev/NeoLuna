@@ -1,4 +1,4 @@
--- Estado, guardado y reglas de economía por jugador (solo servidor).
+-- Datos del jugador (dinero, mejoras, inventario), guardado y reglas de compra/venta.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8,25 +8,25 @@ local ProfileStore = require(script.Parent.ProfileStore)
 
 local Economy = {}
 
-local store = ProfileStore.New("PlayerData", {
-	Credits = Config.StartingCredits,
-	Drones = 1,
-	Capacity = 0,
+local store = ProfileStore.New("MinerosLunares_v1", {
+	Money = Config.StartingMoney,
 	Speed = 0,
-	LastSeen = 0, -- os.time() del último guardado; 0 = jugador nuevo
+	Strength = 0,
+	Pickaxe = 0,
+	Inventory = {}, -- lista de ids de minerales (máx. Config.InventorySize)
 })
 
-local states = {} -- player -> profile.Data
+local datas = {} -- player -> profile.Data
 local profiles = {}
 
 -- Se asigna desde Main para avisar al cliente de cambios.
-Economy.OnChanged = function(_player, _state) end
+Economy.OnChanged = function(_player, _data) end
 
 local function notify(player)
-	Economy.OnChanged(player, states[player])
+	Economy.OnChanged(player, datas[player])
 end
 
--- Carga el perfil (yield). Devuelve las ganancias offline, o nil si falló.
+-- Carga el perfil (yield). Devuelve true si el jugador quedó listo.
 function Economy.Load(player)
 	local profile = store:StartSessionAsync("Player_" .. player.UserId, {
 		Cancel = function()
@@ -38,14 +38,14 @@ function Economy.Load(player)
 		if player.Parent == Players then
 			player:Kick("No se pudieron cargar tus datos. Vuelve a entrar.")
 		end
-		return nil
+		return false
 	end
 
 	profile:AddUserId(player.UserId)
 	profile:Reconcile()
 
 	profile.OnSessionEnd:Connect(function()
-		states[player] = nil
+		datas[player] = nil
 		profiles[player] = nil
 		if player.Parent == Players then
 			player:Kick("Tu sesión de datos terminó. Vuelve a entrar.")
@@ -54,73 +54,69 @@ function Economy.Load(player)
 
 	if player.Parent ~= Players then
 		profile:EndSession()
-		return nil
+		return false
 	end
 
-	local state = profile.Data
-	local now = os.time()
-
-	local earned = 0
-	if state.LastSeen > 0 then
-		local elapsed = math.clamp(now - state.LastSeen, 0, Config.Offline.MaxSeconds)
-		earned = math.floor(elapsed * Config.GetIncomePerSecond(state) * Config.Offline.Rate)
-	end
-	state.Credits += earned
-	state.LastSeen = now
-
-	local function stamp()
-		state.LastSeen = os.time()
-	end
-	profile.OnSave:Connect(stamp)
-	profile.OnLastSave:Connect(stamp)
-
-	states[player] = state
+	datas[player] = profile.Data
 	profiles[player] = profile
 	notify(player)
-	return earned
+	return true
 end
 
 function Economy.Get(player)
-	return states[player]
+	return datas[player]
 end
 
 function Economy.Remove(player)
 	local profile = profiles[player]
-	states[player] = nil
+	datas[player] = nil
 	profiles[player] = nil
 	if profile then
 		profile:EndSession()
 	end
 end
 
-function Economy.Deliver(player, units)
-	local state = states[player]
-	if not state then
-		return
+-- Guarda un mineral en la mochila. Devuelve false si no hay espacio o no existe.
+function Economy.AddMineral(player, mineralId)
+	local data = datas[player]
+	if not data or not Config.MineralsById[mineralId] or #data.Inventory >= Config.InventorySize then
+		return false
 	end
-	state.Credits += units * Config.RegolithValue
+	table.insert(data.Inventory, mineralId)
 	notify(player)
+	return true
 end
 
--- Devuelve true si la compra se hizo.
-function Economy.Purchase(player, kind)
-	local state = states[player]
-	if not state or typeof(kind) ~= "string" or not Config.Upgrades[kind] then
+-- Vende el mineral del espacio `index`. Devuelve los créditos ganados, o nil.
+function Economy.Sell(player, index)
+	local data = datas[player]
+	if not data or type(index) ~= "number" or index % 1 ~= 0 or index < 1 or index > #data.Inventory then
+		return nil
+	end
+	local mineral = Config.MineralsById[data.Inventory[index]]
+	table.remove(data.Inventory, index)
+	local value = mineral and mineral.Value or 0
+	data.Money += value
+	notify(player)
+	return value
+end
+
+-- Compra el siguiente nivel de una mejora. Devuelve true si se hizo.
+function Economy.PurchaseUpgrade(player, kind)
+	local data = datas[player]
+	if not data or type(kind) ~= "string" or not Config.Upgrades[kind] then
 		return false
 	end
-	if kind == "Drone" and state.Drones >= Config.MaxDrones then
+	local level = data[kind]
+	if level >= Config.Upgrades[kind].MaxLevel then
 		return false
 	end
-	local cost = Config.GetCost(kind, state)
-	if state.Credits < cost then
+	local cost = Config.GetUpgradeCost(kind, level)
+	if data.Money < cost then
 		return false
 	end
-	state.Credits -= cost
-	if kind == "Drone" then
-		state.Drones += 1
-	else
-		state[kind] += 1
-	end
+	data.Money -= cost
+	data[kind] = level + 1
 	notify(player)
 	return true
 end

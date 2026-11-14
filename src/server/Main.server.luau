@@ -1,8 +1,12 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local Economy = require(script.Parent.Economy)
-local DroneService = require(script.Parent.DroneService)
+local MineService = require(script.Parent.MineService)
+local WorldBuilder = require(script.Parent.WorldBuilder)
+
+local SHOP_USE_DISTANCE = 35 -- a qué distancia de la tienda se puede vender y mejorar
 
 -- Remotes
 local remotes = Instance.new("Folder")
@@ -16,57 +20,68 @@ local function newRemote(name)
 	return remote
 end
 
-local buyRemote = newRemote("Buy") -- cliente -> servidor
-local stateRemote = newRemote("StateChanged") -- servidor -> cliente
-local requestRemote = newRemote("RequestState") -- cliente -> servidor
-local offlineRemote = newRemote("OfflineEarnings") -- servidor -> cliente
+-- servidor -> cliente
+local stateRemote = newRemote("StateChanged")
+newRemote("Notice")
+newRemote("Carry")
+local openShopRemote = newRemote("OpenShop")
+-- cliente -> servidor
+local requestRemote = newRemote("RequestState")
+newRemote("Throw")
+local buyUpgradeRemote = newRemote("BuyUpgrade")
+local sellRemote = newRemote("SellMineral")
 
-Economy.OnChanged = function(player, state)
-	stateRemote:FireClient(player, state)
+local world = WorldBuilder.Build()
+MineService.Init(remotes)
+
+local function applyWalkSpeed(player)
+	local data = Economy.Get(player)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if data and humanoid then
+		humanoid.WalkSpeed = Config.GetWalkSpeed(data.Speed)
+	end
 end
 
--- El estado y las ganancias offline se envían cuando el perfil ya cargó
--- Y el cliente avisó de que está listo, sea cual sea el que llegue primero.
-local clientReady = {}
-local pendingOffline = {}
-
-local function flush(player)
-	local state = Economy.Get(player)
-	if not (clientReady[player] and state) then
-		return
-	end
-	stateRemote:FireClient(player, state)
-	local earned = pendingOffline[player]
-	if earned and earned > 0 then
-		offlineRemote:FireClient(player, earned)
-	end
-	pendingOffline[player] = nil
+Economy.OnChanged = function(player, data)
+	stateRemote:FireClient(player, data)
+	applyWalkSpeed(player)
 end
 
-buyRemote.OnServerEvent:Connect(function(player, kind)
-	if Economy.Purchase(player, kind) and kind == "Drone" then
-		DroneService.Spawn(player)
+local function nearShop(player)
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	return hrp ~= nil and (hrp.Position - world.ShopPosition).Magnitude <= SHOP_USE_DISTANCE
+end
+
+world.ShopPrompt.Triggered:Connect(function(player)
+	openShopRemote:FireClient(player, world.ShopPosition)
+end)
+
+buyUpgradeRemote.OnServerEvent:Connect(function(player, kind)
+	if nearShop(player) then
+		Economy.PurchaseUpgrade(player, kind)
+	end
+end)
+
+sellRemote.OnServerEvent:Connect(function(player, index)
+	if nearShop(player) then
+		Economy.Sell(player, index)
 	end
 end)
 
 requestRemote.OnServerEvent:Connect(function(player)
-	clientReady[player] = true
-	flush(player)
+	local data = Economy.Get(player)
+	if data then
+		stateRemote:FireClient(player, data)
+	end
 end)
 
-DroneService.BuildWorld()
-
 local function onPlayerAdded(player)
-	local earned = Economy.Load(player)
-	if not earned then
-		return
-	end
-	-- Un dron por cada uno que el jugador ya tenía guardado.
-	for _ = 1, Economy.Get(player).Drones do
-		DroneService.Spawn(player)
-	end
-	pendingOffline[player] = earned
-	flush(player)
+	player.CharacterAdded:Connect(function()
+		applyWalkSpeed(player)
+	end)
+	Economy.Load(player)
 end
 
 Players.PlayerAdded:Connect(onPlayerAdded)
@@ -74,8 +89,4 @@ for _, player in Players:GetPlayers() do
 	task.spawn(onPlayerAdded, player)
 end
 
-Players.PlayerRemoving:Connect(function(player)
-	clientReady[player] = nil
-	pendingOffline[player] = nil
-	Economy.Remove(player)
-end)
+Players.PlayerRemoving:Connect(Economy.Remove)
