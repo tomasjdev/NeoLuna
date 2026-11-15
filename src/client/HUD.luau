@@ -17,7 +17,6 @@ local BORDER = Color3.fromRGB(190, 165, 255)
 local GOLD = Color3.fromRGB(255, 200, 60)
 local EMPTY_SLOT = Color3.fromRGB(236, 230, 248)
 local DISABLED = Color3.fromRGB(190, 184, 208)
-local WARNING = Color3.fromRGB(255, 225, 235)
 local FONT = Enum.Font.FredokaOne
 
 local ROW_COLORS = {
@@ -44,7 +43,7 @@ end
 
 local HUD = {}
 
--- ui = { state, carry, notice, shopOpen, backpackOpen, selected, depth } (Values de Fusion)
+-- ui = { state, carry, notice, shopKind, robuxKind, backpackOpen, selected, depth } (Values de Fusion)
 -- handlers = { onUpgrade = function(kind), onSell = function(index) }
 function HUD.mount(parent, ui, handlers)
 	local scope = Fusion.scoped(Fusion)
@@ -54,7 +53,9 @@ function HUD.mount(parent, ui, handlers)
 	end
 
 	local function closeAll()
-		ui.shopOpen:set(false)
+		ui.shopKind:set("")
+		ui.robuxKind:set("")
+		ui.placeStand:set(0)
 		ui.backpackOpen:set(false)
 	end
 
@@ -176,35 +177,25 @@ function HUD.mount(parent, ui, handlers)
 	}
 
 	----------------------------------------------------------------------
-	-- Estado (arriba al centro): profundidad o aviso de carga
+	-- Estado (arriba al centro): solo la zona
 	----------------------------------------------------------------------
-
-	local carryName = scope:Computed(function(use)
-		local m = Config.MineralsById[use(ui.carry)]
-		return if m then m.Name else ""
-	end)
 
 	local statusPanel = scope:New "TextLabel" {
 		Name = "Status",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 20),
-		Size = UDim2.fromOffset(420, 44),
-		BackgroundColor3 = scope:Computed(function(use)
-			return if use(carryName) ~= "" then WARNING else WHITE
-		end),
+		Size = UDim2.fromOffset(240, 44),
+		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
 		Font = FONT,
 		TextSize = 20,
 		TextColor3 = TEXT,
 		Text = scope:Computed(function(use)
 			local depth = use(ui.depth)
-			local carrying = use(carryName)
-			if carrying ~= "" then
-				return ("¡Llevas %s! Faltan %d m para la línea"):format(carrying, depth)
-			elseif depth <= 0 then
+			if depth <= 0 then
 				return "Base lunar"
 			end
-			return ("Profundidad %d m · %s"):format(depth, Config.Zones[Config.GetZone(depth)].Name)
+			return Config.Zones[Config.GetZone(depth)].Name
 		end),
 
 		[Children] = {
@@ -309,7 +300,10 @@ function HUD.mount(parent, ui, handlers)
 	end)
 
 	local canSell = scope:Computed(function(use)
-		return use(ui.shopOpen) and use(selectedMineral) ~= false
+		return use(ui.shopKind) == "Sell" and use(selectedMineral) ~= false
+	end)
+	local canPlace = scope:Computed(function(use)
+		return use(ui.placeStand) > 0 and use(selectedMineral) ~= false
 	end)
 
 	local backpackPanel = scope:New "Frame" {
@@ -321,7 +315,7 @@ function HUD.mount(parent, ui, handlers)
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
 		Visible = scope:Computed(function(use)
-			return use(ui.backpackOpen) or use(ui.shopOpen)
+			return use(ui.backpackOpen) or use(ui.shopKind) == "Sell" or use(ui.placeStand) > 0
 		end),
 
 		[Children] = {
@@ -345,7 +339,9 @@ function HUD.mount(parent, ui, handlers)
 				TextSize = 22,
 				TextColor3 = TEXT,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				Text = "Mi mochila",
+				Text = scope:Computed(function(use)
+					return if use(ui.placeStand) > 0 then "Elige un mineral para el estante" else "Mi mochila"
+				end),
 			},
 			scope:New "Frame" {
 				Name = "Grid",
@@ -403,6 +399,34 @@ function HUD.mount(parent, ui, handlers)
 				[Children] = { rounded(14) },
 			},
 			scope:New "TextButton" {
+				Name = "PlaceButton",
+				LayoutOrder = 4,
+				Size = UDim2.fromOffset(376, 44),
+				BackgroundColor3 = Color3.fromRGB(150, 110, 255),
+				BorderSizePixel = 0,
+				AutoButtonColor = false,
+				Font = FONT,
+				TextSize = 20,
+				TextColor3 = WHITE,
+				Visible = canPlace,
+				Text = scope:Computed(function(use)
+					local m = use(selectedMineral)
+					return if m then ("Dejar %s en el estante"):format(m.Name) else ""
+				end),
+
+				[OnEvent "Activated"] = function()
+					local standIndex = peek(ui.placeStand)
+					local inventoryIndex = peek(ui.selected)
+					if peek(canPlace) then
+						handlers.onPlace(standIndex, inventoryIndex)
+						ui.selected:set(0)
+						ui.placeStand:set(0)
+					end
+				end,
+
+				[Children] = { rounded(14) },
+			},
+			scope:New "TextButton" {
 				Name = "CloseButton",
 				LayoutOrder = 5,
 				Size = UDim2.fromOffset(376, 36),
@@ -444,10 +468,13 @@ function HUD.mount(parent, ui, handlers)
 			elseif kind == "Speed" then
 				return ("Correr: %.1f → %.1f"):format(Config.GetWalkSpeed(l), Config.GetWalkSpeed(l + 1))
 			elseif kind == "Strength" then
-				return ("Alcance: %d → %d"):format(Config.GetThrowRange(l), Config.GetThrowRange(l + 1))
+				return ("Tiempo de picado: %d%% → %d%%"):format(
+					math.floor(Config.GetStrengthFactor(l) * 100 + 0.5),
+					math.floor(Config.GetStrengthFactor(l + 1) * 100 + 0.5)
+				)
 			end
 			local unlock = unlockedRarity(l + 1)
-			return if unlock then ("Desbloquea minerales %s"):format(unlock) else "Más suerte con raros"
+			return if unlock then ("Pica minerales %s más rápido"):format(unlock) else "Pico más resistente"
 		end)
 
 		local fill = scope:Tween(
@@ -460,6 +487,9 @@ function HUD.mount(parent, ui, handlers)
 		return scope:New "TextButton" {
 			Name = kind,
 			LayoutOrder = layoutOrder,
+			Visible = scope:Computed(function(use)
+				return use(ui.shopKind) == kind
+			end),
 			Size = UDim2.new(1, 0, 0, 56),
 			BackgroundColor3 = fill,
 			BorderSizePixel = 0,
@@ -528,7 +558,10 @@ function HUD.mount(parent, ui, handlers)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
-		Visible = ui.shopOpen,
+		Visible = scope:Computed(function(use)
+			local kind = use(ui.shopKind)
+			return kind ~= "" and kind ~= "Sell"
+		end),
 
 		[Children] = {
 			rounded(20),
@@ -551,7 +584,10 @@ function HUD.mount(parent, ui, handlers)
 				TextSize = 22,
 				TextColor3 = TEXT,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				Text = "Tienda lunar",
+				Text = scope:Computed(function(use)
+					local upgrade = Config.Upgrades[use(ui.shopKind)]
+					return if upgrade then upgrade.Label else ""
+				end),
 			},
 			scope:New "TextLabel" {
 				LayoutOrder = 2,
@@ -562,7 +598,17 @@ function HUD.mount(parent, ui, handlers)
 				TextWrapped = true,
 				TextColor3 = DIM,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				Text = "Mejora tus herramientas. Para vender, elige un mineral en tu mochila.",
+				Text = scope:Computed(function(use)
+					local kind = use(ui.shopKind)
+					if kind == "Speed" then
+						return "Corre más rápido para escapar del Alien."
+					elseif kind == "Strength" then
+						return "Pica los minerales en menos tiempo."
+					elseif kind == "Pickaxe" then
+						return "Con un pico mejor, los minerales raros se pican más rápido."
+					end
+					return ""
+				end),
 			},
 			UpgradeRow("Speed", 3),
 			UpgradeRow("Strength", 4),
@@ -570,11 +616,86 @@ function HUD.mount(parent, ui, handlers)
 		},
 	}
 
+	----------------------------------------------------------------------
+	-- Tiendas de Robux (por ahora informativas: falta crear los pases y productos en Roblox)
+	----------------------------------------------------------------------
+
+	local robuxPanel = scope:New "Frame" {
+		Name = "RobuxShop",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.45),
+		Size = UDim2.fromOffset(360, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		Visible = scope:Computed(function(use)
+			return use(ui.robuxKind) ~= ""
+		end),
+
+		[Children] = {
+			rounded(20),
+			scope:New "UIStroke" { Color = Color3.fromRGB(70, 190, 110), Thickness = 4 },
+			scope:New "UIPadding" {
+				PaddingTop = UDim.new(0, 14),
+				PaddingBottom = UDim.new(0, 14),
+				PaddingLeft = UDim.new(0, 14),
+				PaddingRight = UDim.new(0, 14),
+			},
+			scope:New "UIListLayout" {
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				Padding = UDim.new(0, 10),
+			},
+			scope:New "TextLabel" {
+				LayoutOrder = 1,
+				Size = UDim2.new(1, 0, 0, 26),
+				BackgroundTransparency = 1,
+				Font = FONT,
+				TextSize = 22,
+				TextColor3 = TEXT,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Text = scope:Computed(function(use)
+					local product = Config.RobuxProducts[use(ui.robuxKind)]
+					return if product then product.Name else ""
+				end),
+			},
+			scope:New "TextLabel" {
+				LayoutOrder = 2,
+				Size = UDim2.new(1, 0, 0, 60),
+				BackgroundTransparency = 1,
+				Font = Enum.Font.GothamMedium,
+				TextSize = 15,
+				TextWrapped = true,
+				TextColor3 = DIM,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Text = scope:Computed(function(use)
+					local product = Config.RobuxProducts[use(ui.robuxKind)]
+					if not product then
+						return ""
+					end
+					return product.Description .. (if product.Id == 0 then "\n\n¡Muy pronto!" else "")
+				end),
+			},
+			scope:New "TextButton" {
+				LayoutOrder = 3,
+				Size = UDim2.new(1, 0, 0, 36),
+				BackgroundColor3 = DISABLED,
+				BorderSizePixel = 0,
+				AutoButtonColor = false,
+				Font = FONT,
+				TextSize = 18,
+				TextColor3 = WHITE,
+				Text = "Cerrar",
+				[OnEvent "Activated"] = closeAll,
+				[Children] = { rounded(14) },
+			},
+		},
+	}
+
 	scope:New "ScreenGui" {
 		Name = "NeoLunaHUD",
 		ResetOnSpawn = false,
 		Parent = parent,
-		[Children] = { moneyPanel, statusPanel, noticePanel, hotbar, backpackPanel, shopPanel },
+		[Children] = { moneyPanel, statusPanel, noticePanel, hotbar, backpackPanel, shopPanel, robuxPanel },
 	}
 
 	return scope

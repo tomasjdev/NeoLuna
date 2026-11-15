@@ -1,4 +1,4 @@
--- Props procedurales: ovni, pico lanzado y gema que carga el jugador.
+-- Props procedurales: ovni, pico en la mano y gema que carga el jugador.
 -- Sustitutos de los modelos de Blender de más adelante: mismas funciones.
 
 local Props = {}
@@ -26,7 +26,7 @@ local function part(props, parent)
 	return p
 end
 
--- Ovni simpático: platillo menta con cúpula de cristal, alienígena sonriente y
+-- Ovni: platillo plateado con cúpula de cristal, alienígena sonriente y
 -- luces de colores. Se centra en el origen; el rayo de luz sale por debajo.
 function Props.Ufo()
 	local model = Instance.new("Model")
@@ -37,7 +37,8 @@ function Props.Ufo()
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(1.4, 9, 9),
 		CFrame = CFrame.new(0, 0, 0) * VERTICAL,
-		Color = c(170, 235, 200),
+		Color = c(190, 196, 208),
+		Material = Enum.Material.Metal,
 	}, model)
 	model.PrimaryPart = body
 
@@ -46,7 +47,8 @@ function Props.Ufo()
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(0.5, 10.4, 10.4),
 		CFrame = CFrame.new(0, -0.2, 0) * VERTICAL,
-		Color = c(255, 205, 120),
+		Color = c(120, 126, 142),
+		Material = Enum.Material.Metal,
 	}, model)
 
 	part({
@@ -99,34 +101,52 @@ function Props.Ufo()
 	return model
 end
 
--- Pico lanzado: mango de madera y cabeza de metal pastel.
-function Props.Pickaxe()
-	local model = Instance.new("Model")
-	model.Name = "ThrownPickaxe"
+-- Pico en la mano: una Tool (Roblox la sostiene y la anima). El mango apunta a -Z
+-- (hacia adelante) y la cabeza va atravesada en la punta.
+function Props.PickaxeTool()
+	local tool = Instance.new("Tool")
+	tool.Name = "Pico"
+	tool.CanBeDropped = false
+	tool.RequiresHandle = true
 
-	local handle = part({
-		Name = "Handle",
-		Size = Vector3.new(0.5, 0.5, 3.4),
-		CFrame = CFrame.new(0, 0, 0),
-		Color = c(200, 145, 100),
-	}, model)
-	model.PrimaryPart = handle
+	local function piece(name, size, offset, color, shape)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color
+		p.Material = Enum.Material.SmoothPlastic
+		p.CanCollide = false
+		p.CanTouch = false
+		p.CanQuery = false
+		p.Massless = true
+		if shape then
+			p.Shape = shape
+		end
+		return p
+	end
 
-	part({
-		Name = "Head",
-		Size = Vector3.new(3.2, 0.6, 0.7),
-		CFrame = CFrame.new(0, 0, -1.7),
-		Color = c(150, 175, 220),
-	}, model)
-	part({
-		Name = "Tip",
-		Shape = Enum.PartType.Ball,
-		Size = Vector3.one * 0.9,
-		CFrame = CFrame.new(0, 0, -1.7),
-		Color = c(255, 215, 90),
-	}, model)
+	local handle = piece("Handle", Vector3.new(0.4, 0.4, 3.4), nil, c(200, 145, 100))
+	handle.Parent = tool
 
-	return model
+	-- La cabeza va en vertical (en el plano del golpe), como un pico de verdad: al
+	-- bajar el brazo, una punta clava en el mineral y la otra queda detrás.
+	local head = piece("Head", Vector3.new(0.7, 3.4, 0.6), nil, c(150, 175, 220))
+	head.CFrame = handle.CFrame * CFrame.new(0, 0, -1.7)
+	head.Parent = tool
+	local tipLow = piece("TipLow", Vector3.one * 0.9, nil, c(255, 215, 90), Enum.PartType.Ball)
+	tipLow.CFrame = head.CFrame * CFrame.new(0, -1.7, 0)
+	tipLow.Parent = tool
+	local tipHigh = piece("TipHigh", Vector3.one * 0.9, nil, c(255, 215, 90), Enum.PartType.Ball)
+	tipHigh.CFrame = head.CFrame * CFrame.new(0, 1.7, 0)
+	tipHigh.Parent = tool
+
+	for _, other in { head, tipLow, tipHigh } do
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = handle
+		weld.Part1 = other
+		weld.Parent = other
+	end
+	return tool
 end
 
 -- Gema que flota sobre la cabeza del jugador mientras carga un mineral.

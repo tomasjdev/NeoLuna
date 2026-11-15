@@ -19,9 +19,10 @@ domo con renacimientos). Ese diseño se descartó.
 ## Ciclo de juego
 1. El jugador entra a la mina y se aleja de la **línea de inicio**. La
    profundidad es la distancia a esa línea. Cuanto más lejos, minerales más raros.
-2. Mina **un solo mineral por viaje**, **lanzando el pico** (una sola forma de
-   minar, sin picar de cerca). Al lanzar, el pico viaja hacia el objetivo y, si
-   alcanza un mineral, lo rompe y el jugador lo carga.
+2. Mina **un solo mineral por viaje**. Para minar se acerca al mineral y
+   **mantiene una tecla (E)**; mientras la mantiene se reproduce la animación de
+   picar. Al completar el tiempo, el mineral se rompe y el jugador lo carga.
+   (Antes era lanzar el pico a distancia; el dueño lo cambió a este método.)
 3. Al sacar el mineral aparece un **ovni** que persigue al jugador. Cuanto más
    profundo está el jugador, **más rápido es el ovni**.
 4. Si el jugador cruza la línea de inicio, el mineral se guarda en su
@@ -30,12 +31,28 @@ domo con renacimientos). Ese diseño se descartó.
 5. Con un mineral en el inventario el jugador decide: **dejarlo en un puesto de
    su fábrica**, **venderlo en la tienda** o **dárselo a otro jugador**.
 
+## Multijugador (hasta 5 jugadores por servidor)
+- **Bases:** cada jugador tiene su propia base; las 5 están juntas en una misma
+  zona. Cada jugador aparece en la suya.
+- **Plaza central:** espacio común delante de las bases, con una esfera (adorno
+  o punto de encuentro).
+- **Mina compartida:** todos usan el mismo espacio de la mina, pero **cada
+  jugador ve sus propios cristales y minerales** (nadie le quita un mineral a
+  otro). Un cristal que rompes solo desaparece para ti.
+- **Tiendas a los costados de la entrada de la mina:** una de **mejoras**
+  (pico, fuerza, velocidad; también se venden los minerales) y una de **Robux**
+  (pases y compras; el contenido está por definir).
+- **[mi decisión]** Si entran más de 5, los extra aparecen en la plaza sin base.
+  El máximo de jugadores del servidor se fija en Configuración del juego de Roblox.
+
 ## Mejoras (se compran con dinero)
 - **Velocidad**: lo rápido que corre el jugador. Es clave para escapar del ovni.
-- **Fuerza**: la potencia del lanzamiento del pico (hasta dónde llega).
-- **Pico**: su calidad. Permite romper minerales más duros y mejora la
-  probabilidad de sacar minerales mejores.
-Ya no hay velocidad de clicks ni minado de cerca.
+- **Fuerza**: lo rápido que pica. **[mi decisión]** acorta el tiempo que hay que
+  mantener la tecla (4 % por nivel, hasta quedar en el 40 %).
+- **Pico**: su calidad. Los minerales raros o mejores piden cierto nivel de pico.
+  Sin él **se pueden picar igual, pero tardan mucho más** (+50 % de tiempo por
+  cada nivel que falta); con el nivel adecuado, se pican a velocidad normal.
+No hay minado por clicks rápidos ni lanzamiento del pico.
 
 ## Minerales
 Cada mineral tiene una **familia** (normal, radiactivo, extraterrestre, mutante)
@@ -52,7 +69,10 @@ más ganancia. Lista inicial **[mi decisión]**, a ajustar en el balance:
 | Exótico | Mutante | Esporas mutantes, núcleo mutante |
 | Legendario | Especial | Corazón de la Luna, pieza de ovni |
 
-Las probabilidades dependen de la profundidad (zona) y del nivel del pico.
+El mineral de cada nodo se decide cuando el nodo aparece, según la zona, y se
+ve por el color del cristal (los raros brillan). **Tiempo de picado**: cuanto
+más profundo y más raro el mineral, más hay que mantener la tecla (1 s en zona 1
+con un mineral común, hasta ~10 s en zona 5 con uno legendario sin mejoras).
 **[mi decisión]** La mina se divide en zonas por distancia a la línea (aprox. 5);
 cada zona tiene su tabla de probabilidades, y las zonas lejanas solo dan raros
 con buena probabilidad si el pico es bueno.
@@ -60,7 +80,15 @@ con buena probabilidad si el pico es bueno.
 ## Fábrica gigante (almacén)
 - Se organiza **por pisos, con 8 puestos por piso**, que van subiendo.
 - Para tener más almacenamiento se **compran más pisos**.
-- Aquí se guardan minerales en puestos (también sirven para exhibirlos).
+- Aquí se guardan minerales en puestos (estantes o envases) y también sirven para
+  exhibirlos.
+- **Ingreso automático (esto es lo que hace de esto un tycoon):** cada mineral que
+  tienes en un puesto **genera créditos solo**, según qué mineral es; los más raros
+  generan más. Se puede **vender** (te pagan de una vez) o **dejar en un puesto**
+  (genera de a poco, para siempre). **[mi decisión, por confirmar]** el ingreso por
+  segundo de un mineral es su valor de venta dividido en 900 (se paga solo en unos
+  15 minutos), y los detalles de cómo se cobra están por definir.
+- El cartel de la base muestra cuánto está ganando el jugador por segundo.
 - **Fusión**: solo minerales **raros, exóticos y superiores**; los normales no
   se pueden fusionar. **[mi decisión]** 3 minerales iguales de rareza Raro o
   superior dan 1 mineral de la rareza siguiente.
@@ -94,7 +122,7 @@ claro), HUD con Fusion y fuente tipo cartoon. Nada de neón ni oscuridad.
 
 ## No objetivos / anti-objetivos
 - No hay ciudad, drones, edificios, domos ni renacimientos (descartado).
-- No hay minado de cerca ni minado por clicks rápidos.
+- No hay minado por clicks rápidos ni lanzamiento del pico.
 - No llevar más de un mineral por viaje.
 - Si el juego se siente injusto (el ovni siempre alcanza) o de mucho espera,
   el diseño fracasó aunque funcione.
@@ -117,5 +145,5 @@ Se reemplaza: drones, edificios, plataforma de ciudad, pueblo y domo.
 ## Preguntas abiertas
 - Valores de balance (precios, probabilidades, velocidades): se ajustan en la
   fase de balance, con pruebas.
-- Controles en móvil y mando para lanzar el pico (apuntar y soltar): por decidir
-  al construir el lanzamiento.
+- Controles de picado en móvil y mando: el prompt de Roblox funciona con toque,
+  pendiente de comprobar.

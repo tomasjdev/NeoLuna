@@ -1,5 +1,6 @@
--- La mina: nodos de minerales, lanzamiento del pico, ovni perseguidor y entrega.
--- El servidor decide todo; el cliente solo envía a dónde apuntó.
+-- La mina: nodos de minerales, picado manteniendo E, ovni perseguidor y entrega.
+-- El servidor decide todo, incluida la duración del picado: el cliente solo avisa
+-- cuándo empieza y cuándo suelta la tecla antes de tiempo.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -13,24 +14,21 @@ local WorldBuilder = require(script.Parent.WorldBuilder)
 
 local MineService = {}
 
-local AIM_RADIUS = 9 -- studs alrededor del punto apuntado donde se busca un nodo
-local THROW_SPEED = 90 -- studs/s del pico
-local NODE_RESPAWN = 10 -- segundos hasta que reaparece un nodo roto
+local MINE_REACH = 18 -- distancia máxima al nodo para empezar y mantener el picado
+local CANCEL_GRACE = 0.4 -- una cancelación tan cerca del final se ignora (el picado ya casi terminó)
+local SWING_INTERVAL = 0.55 -- segundos entre golpes del pico
 local NODES_PER_ZONE = 16
 
 local rng = Random.new()
 local remotes
 local nodeFolder
-local nodes = {} -- set de modelos de nodo
+local nodes = {} -- set de modelos de nodo (fijos: nunca se destruyen)
+local nodeInfo = {} -- node -> { Counts = { [player] = veces roto }, Until = { [player] = hora } }
 local carrying = {} -- player -> { Mineral, Gem, Ufo }
-local busy = {} -- player -> true mientras el pico está en el aire
+local mining = {} -- player -> { Node, StartedAt, Duration, BasePivot, Tool, Dust, Alive }
 
 local function notice(player, text)
 	remotes.Notice:FireClient(player, text)
-end
-
-local function isFiniteVector(v)
-	return v.X == v.X and v.Y == v.Y and v.Z == v.Z and v.Magnitude < 1e5
 end
 
 -- Mueve un modelo en línea recta hasta `goal` (yield mientras dura).
@@ -47,22 +45,35 @@ local function flyModel(model, goal, duration)
 	value:Destroy()
 end
 
+local function getCharacterParts(player)
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if hrp and humanoid and humanoid.Health > 0 then
+		return character, hrp, humanoid
+	end
+	return nil
+end
+
 ----------------------------------------------------------------------
--- Nodos
+-- Nodos: fijos y compartidos. Cada jugador ve su propio mineral en cada uno (se calcula
+-- con la semilla del nodo) y el nodo que rompes solo desaparece para ti.
 ----------------------------------------------------------------------
+
+local NEUTRAL_CRYSTAL = Color3.fromRGB(150, 150, 165)
 
 local function spawnNode(zone)
 	local length = Config.ZoneLength
 	local x = rng:NextNumber((zone - 1) * length + (if zone == 1 then 50 else 12), zone * length - 12)
 	local z = rng:NextNumber(-Config.MineHalfWidth + 15, Config.MineHalfWidth - 15)
 	local ground = Vector3.new(x, 0, z)
-	local gemColor = Config.Zones[zone].GemColor
 
 	local model = Instance.new("Model")
 	model.Name = "Node"
 
-	local function piece(shape, size, offset, rotation, color, material, transparency)
+	local function piece(name, shape, size, offset, rotation, color, material, transparency)
 		local p = Instance.new("Part")
+		p.Name = name
 		p.Anchored = true
 		p.CanCollide = false
 		p.CastShadow = false
@@ -76,39 +87,32 @@ local function spawnNode(zone)
 		return p
 	end
 
-	local rock = piece(Enum.PartType.Ball, Vector3.one * 5, Vector3.new(0, 1.2, 0), nil, Color3.fromRGB(178, 168, 205))
-	piece(Enum.PartType.Block, Vector3.new(2.2, 5, 2.2), Vector3.new(0, 4, 0), CFrame.Angles(0, math.rad(45), math.rad(8)), gemColor, Enum.Material.Glass, 0.1)
-	piece(Enum.PartType.Block, Vector3.new(1.4, 3, 1.4), Vector3.new(1.8, 3, 0.5), CFrame.Angles(0, math.rad(20), math.rad(-18)), gemColor, Enum.Material.Glass, 0.1)
+	local rock = piece("Rock", Enum.PartType.Ball, Vector3.one * 5, Vector3.new(0, 1.2, 0), nil, Color3.fromRGB(120, 118, 125), Enum.Material.Slate)
+	piece("Crystal", Enum.PartType.Block, Vector3.new(2.2, 5, 2.2), Vector3.new(0, 4, 0), CFrame.Angles(0, math.rad(45), math.rad(8)), NEUTRAL_CRYSTAL, Enum.Material.Glass, 0.1)
+	piece("CrystalSmall", Enum.PartType.Block, Vector3.new(1.4, 3, 1.4), Vector3.new(1.8, 3, 0.5), CFrame.Angles(0, math.rad(20), math.rad(-18)), NEUTRAL_CRYSTAL, Enum.Material.Glass, 0.1)
 
 	model.PrimaryPart = rock
 	model:SetAttribute("Zone", zone)
+	model:SetAttribute("Seed", rng:NextInteger(1, 1000000))
 	model.Parent = nodeFolder
 	nodes[model] = true
+	nodeInfo[model] = { Counts = {}, Until = {} }
 	return model
 end
 
-local function breakNode(node)
-	local zone = node:GetAttribute("Zone")
-	nodes[node] = nil
-	node:Destroy()
-	task.delay(NODE_RESPAWN, function()
-		spawnNode(zone)
-	end)
+-- El mineral de este nodo para este jugador (el cliente calcula el mismo).
+local function playerMineral(node, player)
+	local count = nodeInfo[node].Counts[player] or 0
+	return Config.GetNodeMineral(node:GetAttribute("Seed"), player.UserId, count, node:GetAttribute("Zone"))
 end
 
--- Nodo libre más cercano al punto apuntado y al alcance del jugador.
-local function findNode(target, from, range)
-	local best, bestDistance = nil, AIM_RADIUS
-	for node in nodes do
-		if not node:GetAttribute("Claimed") then
-			local position = node.PrimaryPart.Position
-			local aimDistance = (position - target).Magnitude
-			if aimDistance < bestDistance and (position - from).Magnitude <= range then
-				best, bestDistance = node, aimDistance
-			end
-		end
-	end
-	return best
+-- El jugador rompió el nodo: desaparece para él un rato y luego trae otro mineral.
+local function markBroken(node, player)
+	local info = nodeInfo[node]
+	local count = (info.Counts[player] or 0) + 1
+	info.Counts[player] = count
+	info.Until[player] = os.clock() + Config.NodeRespawn
+	remotes.NodeBroken:FireClient(player, node, count)
 end
 
 ----------------------------------------------------------------------
@@ -142,14 +146,12 @@ local function startCarry(player, mineral)
 	}
 	carrying[player] = carry
 	remotes.Carry:FireClient(player, mineral.Id)
-	notice(player, ("¡Sacaste %s! ¡Corre a la línea!"):format(mineral.Name))
 
 	task.delay(Config.Ufo.SpawnDelay, function()
 		if carrying[player] ~= carry then
 			return
 		end
-		local currentCharacter = player.Character
-		local hrp = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
+		local _, hrp = getCharacterParts(player)
 		if not hrp then
 			return
 		end
@@ -186,12 +188,155 @@ local function caught(player, carry, hrp)
 	end
 end
 
+----------------------------------------------------------------------
+-- Picado (mantener E junto al mineral)
+----------------------------------------------------------------------
+
+local function stopMining(player)
+	local session = mining[player]
+	if not session then
+		return
+	end
+	mining[player] = nil
+	session.Alive = false
+	if session.Node.Parent then
+		session.Node:PivotTo(session.BasePivot)
+	end
+	if session.Dust then
+		session.Dust:Destroy()
+	end
+	if session.Tool then
+		session.Tool:Destroy()
+	end
+end
+
+-- Pico en la mano, polvo y temblor del mineral. Si algo de esto falla, el picado
+-- sigue funcionando: solo se pierde el adorno.
+local function startVisuals(player, session, humanoid)
+	local node = session.Node
+	local ok, err = pcall(function()
+		local tool = Props.PickaxeTool()
+		tool.Parent = player:FindFirstChildOfClass("Backpack") or player.Character
+		humanoid:EquipTool(tool)
+		session.Tool = tool
+
+		local dust = Instance.new("ParticleEmitter")
+		dust.Rate = 24
+		dust.Lifetime = NumberRange.new(0.5, 0.9)
+		dust.Speed = NumberRange.new(4, 8)
+		dust.SpreadAngle = Vector2.new(60, 60)
+		dust.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0) })
+		dust.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) })
+		dust.Color = ColorSequence.new(Color3.fromRGB(190, 188, 184))
+		dust.Acceleration = Vector3.new(0, -6, 0)
+		dust.Parent = node.PrimaryPart
+		session.Dust = dust
+	end)
+	if not ok then
+		warn("[MineService] No se pudo mostrar el pico o el polvo:", err)
+	end
+
+	task.spawn(function()
+		while session.Alive and mining[player] == session do
+			if session.Tool and session.Tool.Parent then
+				local swing = Instance.new("StringValue")
+				swing.Name = "toolanim"
+				swing.Value = "Slash"
+				swing.Parent = session.Tool
+			end
+			for _ = 1, 5 do
+				if not session.Alive or not node.Parent then
+					break
+				end
+				node:PivotTo(session.BasePivot * CFrame.Angles(0, 0, math.rad(rng:NextNumber(-3, 3))))
+				task.wait(SWING_INTERVAL / 5)
+			end
+		end
+	end)
+end
+
+function MineService.StartMining(player, node)
+	if typeof(node) ~= "Instance" or not nodes[node] or not node.PrimaryPart then
+		return
+	end
+	if carrying[player] then
+		return
+	end
+	-- Una sesión vieja del mismo jugador (p. ej. se soltó la tecla sin aviso) se reemplaza.
+	if mining[player] then
+		stopMining(player)
+	end
+	if (nodeInfo[node].Until[player] or 0) > os.clock() then
+		return -- ya lo rompiste: para ti todavía no ha vuelto a aparecer
+	end
+
+	local data = Economy.Get(player)
+	local _, hrp, humanoid = getCharacterParts(player)
+	if not (data and hrp and humanoid) then
+		return
+	end
+	if #data.Inventory >= Config.InventorySize then
+		notice(player, "¡Mochila llena! Vende algo primero.")
+		return
+	end
+	local nodePosition = node.PrimaryPart.Position
+	if (hrp.Position - nodePosition).Magnitude > MINE_REACH then
+		return
+	end
+
+	local mineral = playerMineral(node, player)
+	local rarity = Config.RaritiesById[mineral.Rarity]
+
+	local session = {
+		Node = node,
+		Mineral = mineral,
+		StartedAt = os.clock(),
+		Duration = Config.GetMineTime(data.Strength, data.Pickaxe, node:GetAttribute("Zone"), rarity.Id),
+		BasePivot = node:GetPivot(),
+		Alive = true,
+	}
+	mining[player] = session
+
+	hrp.CFrame = CFrame.lookAt(hrp.Position, Vector3.new(nodePosition.X, hrp.Position.Y, nodePosition.Z))
+	startVisuals(player, session, humanoid)
+end
+
+-- El cliente soltó la tecla (o se alejó). Si ya casi terminaba, se deja terminar.
+function MineService.CancelMining(player)
+	local session = mining[player]
+	if session and os.clock() - session.StartedAt < session.Duration - CANCEL_GRACE then
+		stopMining(player)
+	end
+end
+
+local function finishMining(player, session)
+	local node, mineral = session.Node, session.Mineral
+	stopMining(player)
+	markBroken(node, player)
+	if player.Parent and Economy.Get(player) and not carrying[player] then
+		startCarry(player, mineral)
+	end
+end
+
+----------------------------------------------------------------------
+-- Bucle principal
+----------------------------------------------------------------------
+
 local function step(dt)
+	for player, session in mining do
+		local _, hrp = getCharacterParts(player)
+		if not hrp or not session.Node.Parent then
+			stopMining(player)
+		elseif (hrp.Position - session.Node.PrimaryPart.Position).Magnitude > MINE_REACH + 4 then
+			stopMining(player)
+		elseif os.clock() - session.StartedAt >= session.Duration then
+			finishMining(player, session)
+		end
+	end
+
 	for player, carry in carrying do
-		local character = player.Character
-		local hrp = character and character:FindFirstChild("HumanoidRootPart")
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if not hrp or not humanoid or humanoid.Health <= 0 then
+		local _, hrp = getCharacterParts(player)
+		if not hrp then
 			clearCarry(player)
 			continue
 		end
@@ -219,78 +364,6 @@ local function step(dt)
 	end
 end
 
-----------------------------------------------------------------------
--- Lanzamiento del pico
-----------------------------------------------------------------------
-
-function MineService.Throw(player, target)
-	if typeof(target) ~= "Vector3" or not isFiniteVector(target) then
-		return
-	end
-	if busy[player] or carrying[player] then
-		return
-	end
-
-	local data = Economy.Get(player)
-	local character = player.Character
-	local hrp = character and character:FindFirstChild("HumanoidRootPart")
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if not (data and hrp and humanoid and humanoid.Health > 0) then
-		return
-	end
-	if #data.Inventory >= Config.InventorySize then
-		notice(player, "¡Mochila llena! Vende o guarda algo primero.")
-		return
-	end
-
-	local origin = hrp.Position + Vector3.new(0, 2, 0)
-	local range = Config.GetThrowRange(data.Strength)
-	local node = findNode(target, hrp.Position, range)
-
-	local destination
-	if node then
-		destination = node.PrimaryPart.Position + Vector3.new(0, 3, 0)
-	else
-		local direction = target - origin
-		if direction.Magnitude < 1 then
-			return
-		end
-		destination = origin + direction.Unit * math.min(direction.Magnitude, range)
-	end
-
-	busy[player] = true
-	if node then
-		node:SetAttribute("Claimed", true)
-	end
-
-	task.spawn(function()
-		local aim = CFrame.lookAt(origin, destination)
-		local pickaxe = Props.Pickaxe()
-		pickaxe:PivotTo(aim)
-		pickaxe.Parent = workspace
-
-		local duration = math.max((destination - origin).Magnitude / THROW_SPEED, 0.15)
-		flyModel(pickaxe, CFrame.new(destination) * aim.Rotation, duration)
-
-		if not node then
-			flyModel(pickaxe, aim, duration) -- no alcanzó nada: vuelve
-			pickaxe:Destroy()
-			busy[player] = nil
-			return
-		end
-
-		pickaxe:Destroy()
-		local depth = node.PrimaryPart.Position.X
-		breakNode(node)
-		busy[player] = nil
-
-		local currentData = Economy.Get(player)
-		if player.Parent and currentData and not carrying[player] then
-			startCarry(player, Config.RollMineral(depth, currentData.Pickaxe, rng))
-		end
-	end)
-end
-
 function MineService.Init(remoteFolder)
 	remotes = remoteFolder
 
@@ -303,11 +376,16 @@ function MineService.Init(remoteFolder)
 		end
 	end
 
-	remotes.Throw.OnServerEvent:Connect(MineService.Throw)
+	remotes.MineStart.OnServerEvent:Connect(MineService.StartMining)
+	remotes.MineCancel.OnServerEvent:Connect(MineService.CancelMining)
 	RunService.Heartbeat:Connect(step)
 	Players.PlayerRemoving:Connect(function(player)
+		stopMining(player)
 		clearCarry(player)
-		busy[player] = nil
+		for _, info in nodeInfo do
+			info.Counts[player] = nil
+			info.Until[player] = nil
+		end
 	end)
 end
 

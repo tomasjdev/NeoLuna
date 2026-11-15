@@ -8,10 +8,10 @@ local function c(r, g, b)
 	return Color3.fromRGB(r, g, b)
 end
 
-local WHITE = c(250, 247, 255)
-local SKY = c(170, 220, 255)
-local RED = c(240, 100, 110)
-local BLUE = c(110, 170, 255)
+local WHITE = c(235, 235, 240)
+local SKY = c(120, 150, 185)
+local RED = c(235, 130, 40)
+local BLUE = c(70, 90, 125)
 
 -- Crea una pieza posicionada respecto al origen.
 local function piece(model, origin, offset, size, color, opts)
@@ -50,27 +50,93 @@ local function textBoard(model, origin, offset, size, text, background, textColo
 	return board
 end
 
--- Tienda: fachada amarilla con toldo de rayas y cartel.
-function BuildingModels.Shop(origin)
+-- Tienda: módulo gris claro con toldo de color y cartel.
+function BuildingModels.Shop(origin, text, accent)
+	text = text or "TIENDA"
+	accent = accent or RED
 	local model = Instance.new("Model")
 	model.Name = "Shop"
 	model.WorldPivot = origin
 
-	piece(model, origin, Vector3.new(0, 4, 0), Vector3.new(16, 8, 12), c(255, 225, 150))
-	piece(model, origin, Vector3.new(0, 8.6, 0), Vector3.new(17, 1.2, 13), RED)
+	piece(model, origin, Vector3.new(0, 4, 0), Vector3.new(16, 8, 12), c(205, 208, 216))
+	piece(model, origin, Vector3.new(0, 8.6, 0), Vector3.new(17, 1.2, 13), accent)
 	for i = 0, 3 do
 		piece(
 			model,
 			origin,
 			Vector3.new(-6 + i * 4, 6.6, -7.5),
 			Vector3.new(4, 0.8, 4),
-			if i % 2 == 0 then RED else WHITE
+			if i % 2 == 0 then accent else WHITE
 		)
 	end
 	piece(model, origin, Vector3.new(-4, 2.5, -6.1), Vector3.new(3.4, 5, 0.5), BLUE)
 	piece(model, origin, Vector3.new(4, 3.6, -6.1), Vector3.new(5, 3.6, 0.5), SKY, { Material = Enum.Material.Glass })
-	textBoard(model, origin, Vector3.new(0, 11.2, -5.5), Vector3.new(9, 2.6, 0.6), "TIENDA", WHITE, RED)
+	textBoard(model, origin, Vector3.new(0, 11.2, -5.5), Vector3.new(9, 2.6, 0.6), text, c(38, 42, 52), accent)
 	return model
 end
+
+local GOLD = c(255, 205, 70)
+local STEEL_BLUE = c(150, 170, 215)
+local VERTICAL = CFrame.Angles(0, 0, math.rad(90)) -- tumba un cilindro (eje X -> eje Y)
+
+local function ball(model, origin, offset, diameter, color)
+	return piece(model, origin, offset, Vector3.one * diameter, color, { Shape = Enum.PartType.Ball })
+end
+
+-- Pila de monedas (cilindros verticales).
+local function coinStack(model, origin, offset, count, color)
+	for i = 0, count - 1 do
+		piece(model, origin, offset + Vector3.new(0, i * 1.15, 0), Vector3.new(1, 5, 5), color, { Shape = Enum.PartType.Cylinder, Rotation = VERTICAL })
+		piece(model, origin, offset + Vector3.new(0, i * 1.15, 0), Vector3.new(1.1, 3.6, 3.6), c(255, 235, 150), { Shape = Enum.PartType.Cylinder, Rotation = VERTICAL })
+	end
+end
+
+-- Emblemas que flotan sobre el techo de cada tienda; `origin` es su centro.
+-- Kinds: Pickaxe, Strength, Speed, Sell, X2, Boots, Shield, Credits.
+function BuildingModels.Emblem(kind, origin)
+	local model = Instance.new("Model")
+	model.Name = "Emblem" .. kind
+	model.WorldPivot = origin
+
+	if kind == "Pickaxe" then
+		piece(model, origin, Vector3.new(0, 0, 0), Vector3.new(1, 10, 1), c(200, 145, 100))
+		piece(model, origin, Vector3.new(-2.6, 4.4, 0), Vector3.new(5.6, 1.3, 1.1), STEEL_BLUE, { Rotation = CFrame.Angles(0, 0, math.rad(18)) })
+		piece(model, origin, Vector3.new(2.6, 4.4, 0), Vector3.new(5.6, 1.3, 1.1), STEEL_BLUE, { Rotation = CFrame.Angles(0, 0, math.rad(-18)) })
+		ball(model, origin, Vector3.new(-5.3, 3.3, 0), 1.4, GOLD)
+		ball(model, origin, Vector3.new(5.3, 3.3, 0), 1.4, GOLD)
+	elseif kind == "Strength" then
+		piece(model, origin, Vector3.new(0, 0, 0), Vector3.new(9, 1, 1), c(120, 125, 140), { Shape = Enum.PartType.Cylinder })
+		for _, side in { -1, 1 } do
+			piece(model, origin, Vector3.new(side * 3.4, 0, 0), Vector3.new(1.3, 6, 6), c(230, 90, 90), { Shape = Enum.PartType.Cylinder })
+			piece(model, origin, Vector3.new(side * 4.8, 0, 0), Vector3.new(1.3, 4, 4), c(70, 70, 82), { Shape = Enum.PartType.Cylinder })
+		end
+	elseif kind == "Speed" then
+		local yellow = c(255, 215, 60)
+		piece(model, origin, Vector3.new(1.2, 3.3, 0), Vector3.new(2.2, 5, 1.2), yellow, { Rotation = CFrame.Angles(0, 0, math.rad(-22)) })
+		piece(model, origin, Vector3.new(0, 0.4, 0), Vector3.new(4.2, 1.7, 1.2), yellow)
+		piece(model, origin, Vector3.new(-1.2, -3, 0), Vector3.new(2.2, 5, 1.2), yellow, { Rotation = CFrame.Angles(0, 0, math.rad(-22)) })
+	elseif kind == "Sell" then
+		coinStack(model, origin, Vector3.new(0, -2.5, 0), 5, GOLD)
+	elseif kind == "X2" then
+		textBoard(model, origin, Vector3.new(0, 0, 0), Vector3.new(9, 6, 0.8), "x2", c(38, 42, 52), GOLD)
+	elseif kind == "Boots" then
+		local green = c(70, 190, 110)
+		piece(model, origin, Vector3.new(-0.6, 1.6, 0), Vector3.new(2.6, 5, 2.6), green)
+		piece(model, origin, Vector3.new(0.8, -1.7, 0), Vector3.new(5.6, 2.2, 2.8), green)
+		piece(model, origin, Vector3.new(0.8, -3, 0), Vector3.new(5.8, 0.7, 3), WHITE)
+		ball(model, origin, Vector3.new(-0.6, 4.6, 0), 1.6, GOLD)
+	elseif kind == "Shield" then
+		local face = CFrame.Angles(0, math.rad(90), 0) -- el disco mira a -Z
+		piece(model, origin, Vector3.new(0, 0, 0.4), Vector3.new(0.5, 9.2, 9.2), WHITE, { Shape = Enum.PartType.Cylinder, Rotation = face })
+		piece(model, origin, Vector3.new(0, 0, 0), Vector3.new(0.8, 8, 8), c(90, 150, 235), { Shape = Enum.PartType.Cylinder, Rotation = face })
+		ball(model, origin, Vector3.new(0, 0, -0.7), 2.8, GOLD)
+	elseif kind == "Credits" then
+		coinStack(model, origin, Vector3.new(-3.2, -2.5, 0), 3, GOLD)
+		coinStack(model, origin, Vector3.new(0, -2.5, 0), 5, GOLD)
+		coinStack(model, origin, Vector3.new(3.2, -2.5, 0), 2, GOLD)
+	end
+	return model
+end
+
 
 return BuildingModels

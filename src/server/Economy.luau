@@ -8,12 +8,30 @@ local ProfileStore = require(script.Parent.ProfileStore)
 
 local Economy = {}
 
+local function emptyStands()
+	local stands = {}
+	for index = 1, Config.StandsPerFloor do
+		stands[index] = ""
+	end
+	return stands
+end
+
+local function zeroTimes()
+	local times = {}
+	for index = 1, Config.StandsPerFloor do
+		times[index] = 0
+	end
+	return times
+end
+
 local store = ProfileStore.New("MinerosLunares_v1", {
 	Money = Config.StartingMoney,
 	Speed = 0,
 	Strength = 0,
 	Pickaxe = 0,
 	Inventory = {}, -- lista de ids de minerales (máx. Config.InventorySize)
+	Stands = emptyStands(), -- mineral en cada estante ("" = vacío)
+	StandSince = zeroTimes(), -- os.time() desde que se empezó a juntar en cada estante
 })
 
 local datas = {} -- player -> profile.Data
@@ -76,6 +94,15 @@ function Economy.Remove(player)
 	end
 end
 
+-- Suma dinero (solo para pruebas en Studio).
+function Economy.AddMoney(player, amount)
+	local data = datas[player]
+	if data then
+		data.Money += amount
+		notify(player)
+	end
+end
+
 -- Guarda un mineral en la mochila. Devuelve false si no hay espacio o no existe.
 function Economy.AddMineral(player, mineralId)
 	local data = datas[player]
@@ -99,6 +126,67 @@ function Economy.Sell(player, index)
 	data.Money += value
 	notify(player)
 	return value
+end
+
+local function isIndex(value, max)
+	return type(value) == "number" and value % 1 == 0 and value >= 1 and value <= max
+end
+
+-- Deja el mineral del espacio `inventoryIndex` en un estante vacío. Devuelve ok, mensaje.
+function Economy.PlaceMineral(player, standIndex, inventoryIndex)
+	local data = datas[player]
+	if not data or not isIndex(standIndex, #data.Stands) or not isIndex(inventoryIndex, #data.Inventory) then
+		return false
+	end
+	if data.Stands[standIndex] ~= "" then
+		return false, "Ese estante ya tiene un mineral."
+	end
+	data.Stands[standIndex] = data.Inventory[inventoryIndex]
+	data.StandSince[standIndex] = os.time()
+	table.remove(data.Inventory, inventoryIndex)
+	notify(player)
+	return true
+end
+
+-- Cobra lo que juntó un estante. Devuelve los créditos cobrados.
+function Economy.CollectStand(player, standIndex)
+	local data = datas[player]
+	if not data or not isIndex(standIndex, #data.Stands) then
+		return 0
+	end
+	local mineralId = data.Stands[standIndex]
+	if mineralId == "" then
+		return 0
+	end
+	local pending = Config.GetStandPending(mineralId, data.StandSince[standIndex], os.time())
+	if pending <= 0 then
+		return 0
+	end
+	data.Money += pending
+	data.StandSince[standIndex] = os.time()
+	notify(player)
+	return pending
+end
+
+-- Devuelve el mineral del estante a la mochila (y cobra lo que había juntado).
+function Economy.RemoveMineral(player, standIndex)
+	local data = datas[player]
+	if not data or not isIndex(standIndex, #data.Stands) then
+		return false
+	end
+	local mineralId = data.Stands[standIndex]
+	if mineralId == "" then
+		return false
+	end
+	if #data.Inventory >= Config.InventorySize then
+		return false, "¡Mochila llena! Vende algo primero."
+	end
+	Economy.CollectStand(player, standIndex)
+	table.insert(data.Inventory, mineralId)
+	data.Stands[standIndex] = ""
+	data.StandSince[standIndex] = 0
+	notify(player)
+	return true
 end
 
 -- Compra el siguiente nivel de una mejora. Devuelve true si se hizo.
