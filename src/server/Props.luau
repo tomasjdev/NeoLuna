@@ -1,6 +1,10 @@
 -- Props procedurales: ovni, pico en la mano y gema que carga el jugador.
 -- Sustitutos de los modelos de Blender de más adelante: mismas funciones.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+
 local Props = {}
 
 local function c(r, g, b)
@@ -146,6 +150,28 @@ function Props.PickaxeTool()
 		weld.Part1 = other
 		weld.Parent = other
 	end
+	return tool
+end
+
+-- Mineral en la mano: una Tool cuyo Handle es una gema del color de su rareza.
+function Props.MineralTool(mineralId)
+	local mineral = Config.MineralsById[mineralId]
+	local tool = Instance.new("Tool")
+	tool.Name = mineral and mineral.Name or "Mineral"
+	tool.CanBeDropped = false
+	tool.RequiresHandle = true
+
+	local handle = Instance.new("Part")
+	handle.Name = "Handle"
+	handle.Size = Vector3.new(1.1, 1.8, 1.1)
+	handle.Color = Config.GetRarityColor(mineralId)
+	handle.Material = Enum.Material.Glass
+	handle.Transparency = 0.05
+	handle.CanCollide = false
+	handle.CanTouch = false
+	handle.CanQuery = false
+	handle.Massless = true
+	handle.Parent = tool
 	return tool
 end
 

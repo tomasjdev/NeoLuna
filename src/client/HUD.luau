@@ -15,6 +15,7 @@ local TEXT = Color3.fromRGB(70, 50, 120)
 local DIM = Color3.fromRGB(135, 120, 175)
 local BORDER = Color3.fromRGB(190, 165, 255)
 local GOLD = Color3.fromRGB(255, 200, 60)
+local HELD_COLOR = Color3.fromRGB(255, 120, 0) -- contorno del mineral que llevas en la mano
 local EMPTY_SLOT = Color3.fromRGB(236, 230, 248)
 local DISABLED = Color3.fromRGB(190, 184, 208)
 local FONT = Enum.Font.FredokaOne
@@ -24,12 +25,6 @@ local ROW_COLORS = {
 	Strength = Color3.fromRGB(45, 190, 180),
 	Pickaxe = Color3.fromRGB(150, 110, 255),
 }
-
-local function formatNumber(n)
-	local s = tostring(math.floor(n + 0.5))
-	local formatted = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
-	return (formatted:gsub("^,", ""))
-end
 
 -- Qué rareza desbloquea el pico en cierto nivel (o nil).
 local function unlockedRarity(pickaxeLevel)
@@ -43,8 +38,8 @@ end
 
 local HUD = {}
 
--- ui = { state, carry, notice, shopKind, robuxKind, backpackOpen, selected, depth } (Values de Fusion)
--- handlers = { onUpgrade = function(kind), onSell = function(index) }
+-- ui = { state, carry, notice, shopKind, robuxKind, backpackOpen, selected, held, depth }
+-- (Values de Fusion). handlers = { onUpgrade(kind), onSell(index), onSelectSlot(slot) }
 function HUD.mount(parent, ui, handlers)
 	local scope = Fusion.scoped(Fusion)
 
@@ -55,7 +50,9 @@ function HUD.mount(parent, ui, handlers)
 	local function closeAll()
 		ui.shopKind:set("")
 		ui.robuxKind:set("")
-		ui.placeStand:set(0)
+		ui.fuseOpen:set(false)
+		ui.rebirthOpen:set(false)
+		ui.giftPicking:set(false)
 		ui.backpackOpen:set(false)
 	end
 
@@ -64,14 +61,27 @@ function HUD.mount(parent, ui, handlers)
 		return id and Config.MineralsById[id] or nil
 	end
 
-	-- Un espacio de la mochila (se usa en la barra y en la mochila).
-	local function Slot(index)
+	-- Un espacio de la mochila. `mode`: "hotbar" (barra de 5: elige qué mineral llevas en la
+	-- mano) o "grid" (panel de la mochila: elige cuál ver o vender).
+	local function Slot(index, mode)
+		local selection = if mode == "hotbar" then ui.held else ui.selected
 		local mineral = scope:Computed(function(use)
 			return mineralInfo(use, index) or false
 		end)
 		local isSelected = scope:Computed(function(use)
-			return use(ui.selected) == index
+			return use(selection) == index
 		end)
+		-- El mineral que llevas en la mano se marca igual en la barra y en la mochila.
+		local isHeld = scope:Computed(function(use)
+			return use(ui.held) == index
+		end)
+		local scale = scope:Spring(
+			scope:Computed(function(use)
+				return if use(isHeld) then 1.12 else 1
+			end),
+			40,
+			0.7
+		)
 
 		return scope:New "TextButton" {
 			Name = "Slot" .. index,
@@ -86,16 +96,27 @@ function HUD.mount(parent, ui, handlers)
 			Text = "",
 
 			[OnEvent "Activated"] = function()
-				ui.selected:set(index)
+				if mode == "hotbar" then
+					handlers.onSelectSlot(index)
+				else
+					ui.selected:set(index)
+				end
 			end,
 
 			[Children] = {
 				rounded(14),
+				scope:New "UIScale" { Scale = scale },
 				scope:New "UIStroke" {
 					Color = scope:Computed(function(use)
+						if use(isHeld) then
+							return HELD_COLOR
+						end
 						return if use(isSelected) then TEXT else BORDER
 					end),
 					Thickness = scope:Computed(function(use)
+						if use(isHeld) then
+							return 5
+						end
 						return if use(isSelected) then 4 else 2
 					end),
 				},
@@ -135,7 +156,7 @@ function HUD.mount(parent, ui, handlers)
 		Name = "Money",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -20, 0, 20),
-		Size = UDim2.fromOffset(190, 50),
+		Size = UDim2.fromOffset(250, 50),
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
 
@@ -151,14 +172,6 @@ function HUD.mount(parent, ui, handlers)
 				[Children] = {
 					scope:New "UICorner" { CornerRadius = UDim.new(1, 0) },
 					scope:New "UIStroke" { Color = Color3.fromRGB(235, 160, 20), Thickness = 3 },
-					scope:New "TextLabel" {
-						Size = UDim2.fromScale(1, 1),
-						BackgroundTransparency = 1,
-						Font = FONT,
-						TextSize = 18,
-						TextColor3 = Color3.fromRGB(235, 160, 20),
-						Text = "C",
-					},
 				},
 			},
 			scope:New "TextLabel" {
@@ -167,11 +180,13 @@ function HUD.mount(parent, ui, handlers)
 				BackgroundTransparency = 1,
 				Font = FONT,
 				TextSize = 26,
+				TextScaled = true,
 				TextColor3 = TEXT,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				Text = scope:Computed(function(use)
-					return formatNumber(use(moneySmooth))
+					return Config.FormatMoney(use(moneySmooth))
 				end),
+				[Children] = scope:New "UITextSizeConstraint" { MaxTextSize = 26 },
 			},
 		},
 	}
@@ -184,18 +199,22 @@ function HUD.mount(parent, ui, handlers)
 		Name = "Status",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 20),
-		Size = UDim2.fromOffset(240, 44),
+		Size = UDim2.fromOffset(300, 44),
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
 		Font = FONT,
 		TextSize = 20,
 		TextColor3 = TEXT,
+		-- Solo se muestra dentro de la mina; en la base no aparece.
+		Visible = scope:Computed(function(use)
+			return use(ui.depth) > 0
+		end),
 		Text = scope:Computed(function(use)
 			local depth = use(ui.depth)
 			if depth <= 0 then
-				return "Base lunar"
+				return ""
 			end
-			return Config.Zones[Config.GetZone(depth)].Name
+			return "Mina lunar - " .. Config.Zones[Config.GetZone(depth)].Name
 		end),
 
 		[Children] = {
@@ -243,7 +262,7 @@ function HUD.mount(parent, ui, handlers)
 		},
 	}
 	for index = 1, Config.HotbarSize do
-		table.insert(hotbarChildren, Slot(index))
+		table.insert(hotbarChildren, Slot(index, "hotbar"))
 	end
 	table.insert(
 		hotbarChildren,
@@ -292,7 +311,7 @@ function HUD.mount(parent, ui, handlers)
 		},
 	}
 	for index = 1, Config.InventorySize do
-		table.insert(gridChildren, Slot(index))
+		table.insert(gridChildren, Slot(index, "grid"))
 	end
 
 	local selectedMineral = scope:Computed(function(use)
@@ -301,9 +320,6 @@ function HUD.mount(parent, ui, handlers)
 
 	local canSell = scope:Computed(function(use)
 		return use(ui.shopKind) == "Sell" and use(selectedMineral) ~= false
-	end)
-	local canPlace = scope:Computed(function(use)
-		return use(ui.placeStand) > 0 and use(selectedMineral) ~= false
 	end)
 
 	local backpackPanel = scope:New "Frame" {
@@ -315,7 +331,7 @@ function HUD.mount(parent, ui, handlers)
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
 		Visible = scope:Computed(function(use)
-			return use(ui.backpackOpen) or use(ui.shopKind) == "Sell" or use(ui.placeStand) > 0
+			return use(ui.backpackOpen) or use(ui.shopKind) == "Sell"
 		end),
 
 		[Children] = {
@@ -339,9 +355,7 @@ function HUD.mount(parent, ui, handlers)
 				TextSize = 22,
 				TextColor3 = TEXT,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				Text = scope:Computed(function(use)
-					return if use(ui.placeStand) > 0 then "Elige un mineral para el estante" else "Mi mochila"
-				end),
+				Text = "Mi mochila",
 			},
 			scope:New "Frame" {
 				Name = "Grid",
@@ -364,11 +378,11 @@ function HUD.mount(parent, ui, handlers)
 					if not m then
 						return "Toca un mineral para ver sus datos."
 					end
-					return ("%s · %s · %s · Vale %s cr"):format(
+					return ("%s · %s · %s · Vale %s"):format(
 						m.Name,
 						Config.RaritiesById[m.Rarity].Name,
 						m.Family,
-						formatNumber(m.Value)
+						Config.FormatMoney(m.Value * Config.GetMoneyMultiplier(use(ui.state)))
 					)
 				end),
 			},
@@ -385,7 +399,7 @@ function HUD.mount(parent, ui, handlers)
 				Visible = canSell,
 				Text = scope:Computed(function(use)
 					local m = use(selectedMineral)
-					return if m then ("Vender por %s cr"):format(formatNumber(m.Value)) else ""
+					return if m then ("Vender por %s"):format(Config.FormatMoney(m.Value * Config.GetMoneyMultiplier(use(ui.state)))) else ""
 				end),
 
 				[OnEvent "Activated"] = function()
@@ -399,36 +413,60 @@ function HUD.mount(parent, ui, handlers)
 				[Children] = { rounded(14) },
 			},
 			scope:New "TextButton" {
-				Name = "PlaceButton",
-				LayoutOrder = 4,
+				Name = "SellAllButton",
+				LayoutOrder = 5,
 				Size = UDim2.fromOffset(376, 44),
-				BackgroundColor3 = Color3.fromRGB(150, 110, 255),
+				BackgroundColor3 = Color3.fromRGB(235, 150, 40),
 				BorderSizePixel = 0,
 				AutoButtonColor = false,
 				Font = FONT,
 				TextSize = 20,
 				TextColor3 = WHITE,
-				Visible = canPlace,
-				Text = scope:Computed(function(use)
-					local m = use(selectedMineral)
-					return if m then ("Dejar %s en el estante"):format(m.Name) else ""
+				-- Solo en la tienda de vender y si hay algo en la mochila.
+				Visible = scope:Computed(function(use)
+					return use(ui.shopKind) == "Sell" and #use(ui.state).Inventory > 0
 				end),
-
+				Text = scope:Computed(function(use)
+					local state = use(ui.state)
+					local total = 0
+					for _, id in state.Inventory do
+						local mineral = Config.MineralsById[id]
+						total += (mineral and mineral.Value or 0) * Config.GetMoneyMultiplier(state)
+					end
+					return ("Vender todo por %s"):format(Config.FormatMoney(total))
+				end),
 				[OnEvent "Activated"] = function()
-					local standIndex = peek(ui.placeStand)
-					local inventoryIndex = peek(ui.selected)
-					if peek(canPlace) then
-						handlers.onPlace(standIndex, inventoryIndex)
-						ui.selected:set(0)
-						ui.placeStand:set(0)
+					handlers.onSellAll()
+					ui.selected:set(0)
+				end,
+				[Children] = { rounded(14) },
+			},
+			scope:New "TextButton" {
+				Name = "GiftButton",
+				LayoutOrder = 5,
+				Size = UDim2.fromOffset(376, 44),
+				BackgroundColor3 = Color3.fromRGB(235, 100, 150),
+				BorderSizePixel = 0,
+				AutoButtonColor = false,
+				Font = FONT,
+				TextSize = 20,
+				TextColor3 = WHITE,
+				Text = "Regalar a otro jugador",
+				-- Solo con la mochila abierta (no en la tienda de vender), con un mineral elegido
+				-- y otro jugador en el servidor.
+				Visible = scope:Computed(function(use)
+					return use(ui.backpackOpen) and use(ui.shopKind) ~= "Sell" and use(selectedMineral) ~= false and #use(ui.adminPlayers) > 1
+				end),
+				[OnEvent "Activated"] = function()
+					if peek(selectedMineral) ~= false then
+						ui.giftPicking:set(true)
 					end
 				end,
-
 				[Children] = { rounded(14) },
 			},
 			scope:New "TextButton" {
 				Name = "CloseButton",
-				LayoutOrder = 5,
+				LayoutOrder = 6,
 				Size = UDim2.fromOffset(376, 36),
 				BackgroundColor3 = DISABLED,
 				BorderSizePixel = 0,
@@ -537,13 +575,15 @@ function HUD.mount(parent, ui, handlers)
 					BackgroundTransparency = 1,
 					Font = FONT,
 					TextSize = 19,
+					TextScaled = true,
 					TextColor3 = WHITE,
 					TextXAlignment = Enum.TextXAlignment.Right,
+					[Children] = scope:New "UITextSizeConstraint" { MaxTextSize = 19 },
 					Text = scope:Computed(function(use)
 						if use(maxed) then
 							return "MÁX"
 						end
-						return formatNumber(use(cost)) .. " cr"
+						return Config.FormatMoney(use(cost))
 					end),
 				},
 			},
@@ -672,11 +712,44 @@ function HUD.mount(parent, ui, handlers)
 					if not product then
 						return ""
 					end
-					return product.Description .. (if product.Id == 0 then "\n\n¡Muy pronto!" else "")
+					local state = use(ui.state)
+					local extra = ""
+					if product.Id == 0 then
+						extra = "\n\n¡Muy pronto!"
+					elseif product.Kind == "Pass" and state.Passes[use(ui.robuxKind)] then
+						extra = "\n\n¡Ya lo tienes!"
+					elseif use(ui.robuxKind) == "Shield" then
+						extra = ("\n\nEscudos que tienes: %d"):format(state.Shields or 0)
+					end
+					return product.Description .. extra
 				end),
 			},
 			scope:New "TextButton" {
 				LayoutOrder = 3,
+				Size = UDim2.new(1, 0, 0, 40),
+				BackgroundColor3 = Color3.fromRGB(70, 190, 110),
+				BorderSizePixel = 0,
+				AutoButtonColor = false,
+				Font = FONT,
+				TextSize = 19,
+				TextColor3 = WHITE,
+				Text = "Comprar con Robux",
+				-- Solo si el producto ya existe en Roblox (Id distinto de 0) y no tienes ya el pase.
+				Visible = scope:Computed(function(use)
+					local kind = use(ui.robuxKind)
+					local product = Config.RobuxProducts[kind]
+					if not product or product.Id == 0 then
+						return false
+					end
+					return not (product.Kind == "Pass" and use(ui.state).Passes[kind])
+				end),
+				[OnEvent "Activated"] = function()
+					handlers.onBuyRobux(peek(ui.robuxKind))
+				end,
+				[Children] = { rounded(14) },
+			},
+			scope:New "TextButton" {
+				LayoutOrder = 4,
 				Size = UDim2.new(1, 0, 0, 36),
 				BackgroundColor3 = DISABLED,
 				BorderSizePixel = 0,
@@ -691,11 +764,453 @@ function HUD.mount(parent, ui, handlers)
 		},
 	}
 
+	----------------------------------------------------------------------
+	-- Horno de fusion: 3 minerales de la misma rareza (Raro o superior) -> 1 de la siguiente
+	----------------------------------------------------------------------
+
+	local function FuseRow(rarity, layoutOrder)
+		local target = Config.GetFusionTarget(rarity.Id)
+		local owned = scope:Computed(function(use)
+			local count = 0
+			for _, id in use(ui.state).Inventory do
+				local mineral = Config.MineralsById[id]
+				if mineral and mineral.Rarity == rarity.Id then
+					count += 1
+				end
+			end
+			return count
+		end)
+		local ready = scope:Computed(function(use)
+			return use(owned) >= Config.FusionCount
+		end)
+		return scope:New "Frame" {
+			LayoutOrder = layoutOrder,
+			Size = UDim2.new(1, 0, 0, 54),
+			BackgroundColor3 = EMPTY_SLOT,
+			BorderSizePixel = 0,
+			[Children] = {
+				rounded(12),
+				scope:New "Frame" {
+					Position = UDim2.fromOffset(8, 11),
+					Size = UDim2.fromOffset(32, 32),
+					BackgroundColor3 = rarity.Color,
+					BorderSizePixel = 0,
+					[Children] = { rounded(8) },
+				},
+				scope:New "TextLabel" {
+					Position = UDim2.fromOffset(48, 4),
+					Size = UDim2.new(1, -150, 1, -8),
+					BackgroundTransparency = 1,
+					Font = FONT,
+					TextSize = 14,
+					TextWrapped = true,
+					TextColor3 = TEXT,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					Text = scope:Computed(function(use)
+						return ("%d %s → 1 %s\nTienes %d"):format(Config.FusionCount, rarity.Name, target.Name, use(owned))
+					end),
+				},
+				scope:New "TextButton" {
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -8, 0.5, 0),
+					Size = UDim2.fromOffset(84, 34),
+					BackgroundColor3 = scope:Computed(function(use)
+						return if use(ready) then Color3.fromRGB(255, 140, 60) else DISABLED
+					end),
+					BorderSizePixel = 0,
+					AutoButtonColor = false,
+					Font = FONT,
+					TextSize = 16,
+					TextColor3 = WHITE,
+					Text = "Fusionar",
+					[OnEvent "Activated"] = function()
+						if peek(ready) then
+							handlers.onFuse(rarity.Id)
+						end
+					end,
+					[Children] = { rounded(10) },
+				},
+			},
+		}
+	end
+
+	local fuseChildren = {
+		rounded(20),
+		scope:New "UIStroke" { Color = Color3.fromRGB(255, 140, 60), Thickness = 4 },
+		scope:New "UIPadding" {
+			PaddingTop = UDim.new(0, 14),
+			PaddingBottom = UDim.new(0, 14),
+			PaddingLeft = UDim.new(0, 14),
+			PaddingRight = UDim.new(0, 14),
+		},
+		scope:New "UIListLayout" { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) },
+		scope:New "TextLabel" {
+			LayoutOrder = 1,
+			Size = UDim2.new(1, 0, 0, 26),
+			BackgroundTransparency = 1,
+			Font = FONT,
+			TextSize = 22,
+			TextColor3 = TEXT,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Text = "Horno de fusión",
+		},
+		scope:New "TextLabel" {
+			LayoutOrder = 2,
+			Size = UDim2.new(1, 0, 0, 34),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamMedium,
+			TextSize = 13,
+			TextWrapped = true,
+			TextColor3 = DIM,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Text = "Junta 3 minerales de la misma rareza (Raro o superior) y obtén uno de la rareza siguiente.",
+		},
+	}
+	local fuseOrder = 3
+	for _, rarity in Config.Rarities do
+		if Config.GetFusionTarget(rarity.Id) then
+			table.insert(fuseChildren, FuseRow(rarity, fuseOrder))
+			fuseOrder += 1
+		end
+	end
+	table.insert(fuseChildren, scope:New "TextButton" {
+		LayoutOrder = fuseOrder,
+		Size = UDim2.new(1, 0, 0, 36),
+		BackgroundColor3 = DISABLED,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		Font = FONT,
+		TextSize = 18,
+		TextColor3 = WHITE,
+		Text = "Cerrar",
+		[OnEvent "Activated"] = closeAll,
+		[Children] = { rounded(14) },
+	})
+
+	local fusePanel = scope:New "Frame" {
+		Name = "Fusion",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 20, 0.5, 0),
+		Size = UDim2.fromOffset(340, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		Visible = ui.fuseOpen,
+		[Children] = fuseChildren,
+	}
+
+	----------------------------------------------------------------------
+	-- Altar de renacimiento: solo se pierde el dinero
+	----------------------------------------------------------------------
+
+	local REBIRTH_COLOR = Color3.fromRGB(150, 110, 230)
+	local rebirthDone = scope:Computed(function(use)
+		return use(ui.state).Rebirths or 0
+	end)
+	local rebirthCost = scope:Computed(function(use)
+		return Config.GetRebirthCost(use(ui.state))
+	end)
+	local canRebirth = scope:Computed(function(use)
+		local cost = use(rebirthCost)
+		return cost ~= nil and use(ui.state).Money >= cost
+	end)
+
+	local function RebirthLine(order, textFn)
+		return scope:New "TextLabel" {
+			LayoutOrder = order,
+			Size = UDim2.new(1, 0, 0, 22),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamMedium,
+			TextSize = 15,
+			TextWrapped = true,
+			TextColor3 = TEXT,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Text = scope:Computed(textFn),
+		}
+	end
+
+	local rebirthPanel = scope:New "Frame" {
+		Name = "Rebirth",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 20, 0.5, 0),
+		Size = UDim2.fromOffset(340, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		Visible = ui.rebirthOpen,
+		[Children] = {
+			rounded(20),
+			scope:New "UIStroke" { Color = REBIRTH_COLOR, Thickness = 4 },
+			scope:New "UIPadding" {
+				PaddingTop = UDim.new(0, 14),
+				PaddingBottom = UDim.new(0, 14),
+				PaddingLeft = UDim.new(0, 14),
+				PaddingRight = UDim.new(0, 14),
+			},
+			scope:New "UIListLayout" { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) },
+			scope:New "TextLabel" {
+				LayoutOrder = 1,
+				Size = UDim2.new(1, 0, 0, 26),
+				BackgroundTransparency = 1,
+				Font = FONT,
+				TextSize = 22,
+				TextColor3 = TEXT,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Text = "Renacimiento",
+			},
+			scope:New "TextLabel" {
+				LayoutOrder = 2,
+				Size = UDim2.new(1, 0, 0, 52),
+				BackgroundTransparency = 1,
+				Font = Enum.Font.GothamMedium,
+				TextSize = 13,
+				TextWrapped = true,
+				TextColor3 = DIM,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Text = "Pierdes solo tu dinero. Conservas tus mejoras, minerales, pisos y estantes, y tus estantes generan más para siempre.",
+			},
+			RebirthLine(3, function(use)
+				return ("Renacimientos: %d de %d"):format(use(rebirthDone), Config.Rebirth.Max)
+			end),
+			RebirthLine(4, function(use)
+				local done = use(rebirthDone)
+				if done >= Config.Rebirth.Max then
+					return ("Ganancia de tus estantes: x%s (máximo)"):format(tostring(Config.GetRebirthMultiplier(done)))
+				end
+				return ("Ganancia de tus estantes: x%s → x%s"):format(tostring(Config.GetRebirthMultiplier(done)), tostring(Config.GetRebirthMultiplier(done + 1)))
+			end),
+			RebirthLine(5, function(use)
+				local cost = use(rebirthCost)
+				return if cost then ("Costo: %s"):format(Config.FormatMoney(cost)) else "¡Lo lograste todo!"
+			end),
+			scope:New "TextButton" {
+				LayoutOrder = 6,
+				Size = UDim2.new(1, 0, 0, 42),
+				BackgroundColor3 = scope:Computed(function(use)
+					return if use(canRebirth) then REBIRTH_COLOR else DISABLED
+				end),
+				BorderSizePixel = 0,
+				AutoButtonColor = false,
+				Font = FONT,
+				TextSize = 20,
+				TextColor3 = WHITE,
+				Text = "Renacer",
+				[OnEvent "Activated"] = function()
+					if peek(canRebirth) then
+						handlers.onRebirth()
+					end
+				end,
+				[Children] = { rounded(14) },
+			},
+			scope:New "TextButton" {
+				LayoutOrder = 7,
+				Size = UDim2.new(1, 0, 0, 36),
+				BackgroundColor3 = DISABLED,
+				BorderSizePixel = 0,
+				AutoButtonColor = false,
+				Font = FONT,
+				TextSize = 18,
+				TextColor3 = WHITE,
+				Text = "Cerrar",
+				[OnEvent "Activated"] = closeAll,
+				[Children] = { rounded(14) },
+			},
+		},
+	}
+
+	----------------------------------------------------------------------
+	-- Regalos: elegir a quién regalar y la oferta que te hacen
+	----------------------------------------------------------------------
+
+	local GIFT_COLOR = Color3.fromRGB(235, 100, 150)
+	local GREEN_BUTTON = Color3.fromRGB(45, 175, 110)
+	local localUserId = game:GetService("Players").LocalPlayer.UserId
+
+	-- Los demás jugadores del servidor (ui.adminPlayers incluye a todos; se quita el propio).
+	local otherPlayers = scope:Computed(function(use)
+		local list = {}
+		for _, info in use(ui.adminPlayers) do
+			if info.UserId ~= localUserId then
+				table.insert(list, info)
+			end
+		end
+		return list
+	end)
+
+	local pickerChildren = {
+		rounded(20),
+		scope:New "UIStroke" { Color = GIFT_COLOR, Thickness = 4 },
+		scope:New "UIPadding" {
+			PaddingTop = UDim.new(0, 14),
+			PaddingBottom = UDim.new(0, 14),
+			PaddingLeft = UDim.new(0, 14),
+			PaddingRight = UDim.new(0, 14),
+		},
+		scope:New "UIListLayout" { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) },
+		scope:New "TextLabel" {
+			LayoutOrder = 1,
+			Size = UDim2.fromOffset(300, 26),
+			BackgroundTransparency = 1,
+			Font = FONT,
+			TextSize = 20,
+			TextColor3 = TEXT,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Text = "¿A quién se lo regalas?",
+		},
+	}
+	for slot = 1, Config.MaxPlayers - 1 do
+		table.insert(pickerChildren, scope:New "TextButton" {
+			LayoutOrder = 1 + slot,
+			Size = UDim2.fromOffset(300, 38),
+			BackgroundColor3 = GIFT_COLOR,
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			Font = FONT,
+			TextSize = 17,
+			TextColor3 = WHITE,
+			Visible = scope:Computed(function(use)
+				return use(otherPlayers)[slot] ~= nil
+			end),
+			Text = scope:Computed(function(use)
+				local info = use(otherPlayers)[slot]
+				return if info then info.Name else ""
+			end),
+			[OnEvent "Activated"] = function()
+				local info = peek(otherPlayers)[slot]
+				local index = peek(ui.selected)
+				if info and index > 0 then
+					handlers.onGift(info.UserId, index)
+					ui.giftPicking:set(false)
+					ui.selected:set(0)
+				end
+			end,
+			[Children] = { rounded(12) },
+		})
+	end
+	table.insert(pickerChildren, scope:New "TextButton" {
+		LayoutOrder = 20,
+		Size = UDim2.fromOffset(300, 34),
+		BackgroundColor3 = DISABLED,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		Font = FONT,
+		TextSize = 17,
+		TextColor3 = WHITE,
+		Text = "Cancelar",
+		[OnEvent "Activated"] = function()
+			ui.giftPicking:set(false)
+		end,
+		[Children] = { rounded(12) },
+	})
+
+	local giftPicker = scope:New "Frame" {
+		Name = "GiftPicker",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.45),
+		Size = UDim2.fromOffset(328, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		Visible = ui.giftPicking,
+		[Children] = pickerChildren,
+	}
+
+	-- Oferta que te hacen: aceptar o rechazar.
+	local giftOfferPanel = scope:New "Frame" {
+		Name = "GiftOffer",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 130),
+		Size = UDim2.fromOffset(420, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		Visible = scope:Computed(function(use)
+			return use(ui.giftOffer) ~= false
+		end),
+		[Children] = {
+			rounded(18),
+			scope:New "UIStroke" { Color = GIFT_COLOR, Thickness = 4 },
+			scope:New "UIPadding" {
+				PaddingTop = UDim.new(0, 12),
+				PaddingBottom = UDim.new(0, 12),
+				PaddingLeft = UDim.new(0, 14),
+				PaddingRight = UDim.new(0, 14),
+			},
+			scope:New "UIListLayout" { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) },
+			scope:New "TextLabel" {
+				LayoutOrder = 1,
+				Size = UDim2.new(1, 0, 0, 44),
+				BackgroundTransparency = 1,
+				Font = FONT,
+				TextSize = 17,
+				TextWrapped = true,
+				TextColor3 = TEXT,
+				Text = scope:Computed(function(use)
+					local offer = use(ui.giftOffer)
+					if not offer then
+						return ""
+					end
+					local mineral = Config.MineralsById[offer.MineralId]
+					local name = if mineral then ("%s (%s)"):format(mineral.Name, Config.RaritiesById[mineral.Rarity].Name) else "un mineral"
+					return ("%s te quiere regalar %s"):format(offer.From, name)
+				end),
+			},
+			scope:New "Frame" {
+				LayoutOrder = 2,
+				Size = UDim2.new(1, 0, 0, 38),
+				BackgroundTransparency = 1,
+				[Children] = {
+					scope:New "UIListLayout" {
+						FillDirection = Enum.FillDirection.Horizontal,
+						Padding = UDim.new(0, 10),
+						SortOrder = Enum.SortOrder.LayoutOrder,
+					},
+					scope:New "TextButton" {
+						LayoutOrder = 1,
+						Size = UDim2.new(0.5, -5, 1, 0),
+						BackgroundColor3 = GREEN_BUTTON,
+						BorderSizePixel = 0,
+						AutoButtonColor = false,
+						Font = FONT,
+						TextSize = 18,
+						TextColor3 = WHITE,
+						Text = "Aceptar",
+						[OnEvent "Activated"] = function()
+							local offer = peek(ui.giftOffer)
+							if offer then
+								handlers.onGiftAnswer(offer.Id, true)
+							end
+						end,
+						[Children] = { rounded(12) },
+					},
+					scope:New "TextButton" {
+						LayoutOrder = 2,
+						Size = UDim2.new(0.5, -5, 1, 0),
+						BackgroundColor3 = DISABLED,
+						BorderSizePixel = 0,
+						AutoButtonColor = false,
+						Font = FONT,
+						TextSize = 18,
+						TextColor3 = WHITE,
+						Text = "Rechazar",
+						[OnEvent "Activated"] = function()
+							local offer = peek(ui.giftOffer)
+							if offer then
+								handlers.onGiftAnswer(offer.Id, false)
+							end
+						end,
+						[Children] = { rounded(12) },
+					},
+				},
+			},
+		},
+	}
+
 	scope:New "ScreenGui" {
 		Name = "NeoLunaHUD",
 		ResetOnSpawn = false,
 		Parent = parent,
-		[Children] = { moneyPanel, statusPanel, noticePanel, hotbar, backpackPanel, shopPanel, robuxPanel },
+		[Children] = { moneyPanel, statusPanel, noticePanel, hotbar, backpackPanel, shopPanel, robuxPanel, fusePanel, rebirthPanel, giftPicker, giftOfferPanel },
 	}
 
 	return scope

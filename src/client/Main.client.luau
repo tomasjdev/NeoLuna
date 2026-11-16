@@ -3,12 +3,12 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local Fusion = require(ReplicatedStorage.Shared.Fusion)
 local Config = require(ReplicatedStorage.Shared.Config)
 local HUD = require(script.Parent.HUD)
+local AdminPanel = require(script.Parent.AdminPanel)
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -21,12 +21,23 @@ local requestRemote = remotes:WaitForChild("RequestState")
 local mineStartRemote = remotes:WaitForChild("MineStart")
 local mineCancelRemote = remotes:WaitForChild("MineCancel")
 local buyUpgradeRemote = remotes:WaitForChild("BuyUpgrade")
-local devRemote = remotes:WaitForChild("DevCommand")
 local sellRemote = remotes:WaitForChild("SellMineral")
+local adminRemote = remotes:WaitForChild("AdminCommand")
+local adminStatusRemote = remotes:WaitForChild("AdminStatus")
 local placeRemote = remotes:WaitForChild("PlaceMineral")
 local removeRemote = remotes:WaitForChild("RemoveMineral")
+local selectSlotRemote = remotes:WaitForChild("SelectSlot")
+local selectedRemote = remotes:WaitForChild("Selected")
+local fuseRemote = remotes:WaitForChild("FuseMinerals")
+local rebirthRemote = remotes:WaitForChild("RebirthRequest")
+local giftOfferRemote = remotes:WaitForChild("GiftOffer")
+local giftCloseRemote = remotes:WaitForChild("GiftClose")
+local giftRequestRemote = remotes:WaitForChild("GiftRequest")
+local giftAnswerRemote = remotes:WaitForChild("GiftAnswer")
+local sellAllRemote = remotes:WaitForChild("SellAll")
+local buyRobuxRemote = remotes:WaitForChild("BuyRobux")
 
-local SHOP_CLOSE_DISTANCE = 45 -- la tienda se cierra si te alejas más que esto
+local SHOP_CLOSE_DISTANCE = 18 -- la tienda se cierra si te alejas más que esto
 
 -- Usamos nuestra propia barra de inventario, no la de Roblox.
 pcall(function()
@@ -35,15 +46,24 @@ end)
 
 local scope = Fusion.scoped(Fusion)
 local ui = {
-	state = scope:Value({ Money = 0, Speed = 0, Strength = 0, Pickaxe = 0, Inventory = {}, Stands = {} }),
+	state = scope:Value({ Money = 0, Speed = 0, Strength = 0, Pickaxe = 0, Inventory = {}, Stands = {}, Rebirths = 0, Passes = {}, Shields = 0 }),
 	carry = scope:Value(""), -- id del mineral que llevas ("" = ninguno)
 	notice = scope:Value(""),
 	shopKind = scope:Value(""), -- tienda de mejoras abierta: "Sell", "Pickaxe", "Strength" o "Speed"
 	robuxKind = scope:Value(""), -- tienda de Robux abierta: "X2", "Boots", "Shield" o "Credits"
+	fuseOpen = scope:Value(false), -- panel del horno de fusión
+	rebirthOpen = scope:Value(false), -- panel del altar de renacimiento
+	giftOffer = scope:Value(false), -- regalo que te ofrecen: { Id, From, MineralId } o false
+	giftPicking = scope:Value(false), -- eligiendo a quién regalar el mineral seleccionado
 	backpackOpen = scope:Value(false),
-	selected = scope:Value(0), -- espacio de la mochila elegido (0 = ninguno)
-	placeStand = scope:Value(0), -- estante donde estás eligiendo un mineral para dejar (0 = ninguno)
+	selected = scope:Value(0), -- espacio de la mochila elegido en el panel (0 = ninguno)
+	held = scope:Value(0), -- espacio de la barra cuyo mineral llevas en la mano (0 = ninguno)
 	depth = scope:Value(0),
+	isAdmin = scope:Value(false), -- lo decide el servidor
+	adminOpen = scope:Value(false),
+	adminPlayers = scope:Value({}), -- { { UserId, Name } } de los jugadores del servidor
+	adminTarget = scope:Value(player.UserId), -- a quién se aplican las acciones del panel
+	adminAmount = scope:Value(""),
 }
 
 ----------------------------------------------------------------------
@@ -121,6 +141,8 @@ local nodeStates = {} -- node -> estado
 
 local function attachNode(node)
 	local rock = node:WaitForChild("Rock", 10)
+	node:WaitForChild("Crystal", 10)
+	node:WaitForChild("CrystalSmall", 10)
 	local zone = node:GetAttribute("Zone")
 	local seed = node:GetAttribute("Seed")
 	if not (rock and zone and seed) then
@@ -181,18 +203,46 @@ nodeBrokenRemote.OnClientEvent:Connect(function(node, count)
 end)
 
 ----------------------------------------------------------------------
--- Estantes de TU base: un prompt en cada uno para dejar o retirar un mineral. La placa
--- verde del suelo (cobrar) la maneja el servidor al pisarla.
+-- Estantes de TU base.
+--  * Dejar un mineral: elegirlo con 1 a 5 (el personaje lo lleva en la mano) y mantener E
+--    junto a un estante vacío.
+--  * Retirarlo: mantener E junto a un estante ocupado.
+-- La placa verde del suelo (cobrar) la maneja el servidor al pisarla.
 ----------------------------------------------------------------------
 
 local standPrompts = {} -- índice de estante -> { Prompt, Position }
-local standPosition = nil -- estante cuyo panel de colocar está abierto
+
+local noticeId = 0
+local function showNotice(text)
+	noticeId += 1
+	local id = noticeId
+	ui.notice:set(text)
+	task.delay(4, function()
+		if noticeId == id then
+			ui.notice:set("")
+		end
+	end)
+end
+
+local function isStandEmpty(index)
+	local stands = Fusion.peek(ui.state).Stands or {}
+	return (stands[index] or "") == ""
+end
 
 local function refreshStandPrompts()
-	local stands = Fusion.peek(ui.state).Stands or {}
 	for index, info in standPrompts do
-		info.Prompt.ActionText = if (stands[index] or "") ~= "" then "Retirar mineral" else "Dejar mineral"
+		info.Prompt.ActionText = if isStandEmpty(index) then "Dejar mineral" else "Retirar mineral"
 	end
+end
+
+-- Deja en el estante el mineral que llevas en la mano.
+local function placeHeldMineral(standIndex)
+	local slot = Fusion.peek(ui.held)
+	if slot < 1 then
+		showNotice("Toma un mineral con las teclas 1 a 5 para dejarlo.")
+		return
+	end
+	placeRemote:FireServer(standIndex, slot)
 end
 
 local function attachStandPrompts(baseIndex)
@@ -201,21 +251,22 @@ local function attachStandPrompts(baseIndex)
 		if child.Name == "Stand" and child:GetAttribute("BaseIndex") == baseIndex then
 			local standIndex = child:GetAttribute("StandIndex")
 			local prompt = Instance.new("ProximityPrompt")
-			prompt.ObjectText = ("Estante %d"):format(standIndex)
+			prompt.ObjectText = ("Piso %d · Estante %d"):format((standIndex - 1) // 8 + 1, (standIndex - 1) % 8 + 1)
+			prompt.Enabled = not child:GetAttribute("Locked")
+			child:GetAttributeChangedSignal("Locked"):Connect(function()
+				prompt.Enabled = not child:GetAttribute("Locked")
+			end)
 			prompt.KeyboardKeyCode = Enum.KeyCode.E
-			prompt.HoldDuration = 0
+			prompt.HoldDuration = 0.4
 			prompt.MaxActivationDistance = 12
 			prompt.RequiresLineOfSight = false
 			prompt.Parent = child
 			prompt.Triggered:Connect(function()
-				local stands = Fusion.peek(ui.state).Stands or {}
-				if (stands[standIndex] or "") ~= "" then
+				if not isStandEmpty(standIndex) then
 					removeRemote:FireServer(standIndex)
-				else
-					ui.selected:set(0)
-					standPosition = child.Position
-					ui.placeStand:set(standIndex)
+					return
 				end
+				placeHeldMineral(standIndex)
 			end)
 			standPrompts[standIndex] = { Prompt = prompt, Position = child.Position }
 		end
@@ -237,6 +288,57 @@ task.spawn(function()
 	end
 end)
 
+-- Carteles y prompts de las bases (bloqueado, costos, nuevo piso) solo se ven en TU base:
+-- el servidor los muestra para quien los necesite y aquí se ocultan los de las demás.
+task.spawn(function()
+	local basesFolder = workspace:WaitForChild("World"):WaitForChild("Bases")
+	while true do
+		local myBase = nil
+		for _, child in basesFolder:GetChildren() do
+			if child:GetAttribute("OwnerUserId") == player.UserId then
+				myBase = child:GetAttribute("Index")
+				break
+			end
+		end
+		for _, descendant in basesFolder:GetDescendants() do
+			if string.sub(descendant.Name, 1, 9) == "OwnerOnly" and (descendant:IsA("BillboardGui") or descendant:IsA("ProximityPrompt")) then
+				local holder = descendant.Parent
+				if holder and holder:GetAttribute("BaseIndex") ~= myBase and descendant.Enabled then
+					descendant.Enabled = false
+				end
+			end
+		end
+		task.wait(0.3)
+	end
+end)
+
+-- Elige (o suelta) el mineral de un espacio de la barra: el personaje lo lleva en la mano.
+-- Pulsar el mismo espacio otra vez lo suelta.
+local function selectSlot(slot)
+	local inventory = Fusion.peek(ui.state).Inventory
+	local newSlot = if slot > #inventory or Fusion.peek(ui.held) == slot then 0 else slot
+	ui.held:set(newSlot)
+	selectSlotRemote:FireServer(newSlot)
+end
+
+local SLOT_KEYS = {
+	[Enum.KeyCode.One] = 1,
+	[Enum.KeyCode.Two] = 2,
+	[Enum.KeyCode.Three] = 3,
+	[Enum.KeyCode.Four] = 4,
+	[Enum.KeyCode.Five] = 5,
+}
+UserInputService.InputBegan:Connect(function(input, processedByUi)
+	if processedByUi then
+		return
+	end
+	local slot = SLOT_KEYS[input.KeyCode]
+	if not slot then
+		return
+	end
+	selectSlot(slot)
+end)
+
 ----------------------------------------------------------------------
 -- Remotes del servidor
 ----------------------------------------------------------------------
@@ -247,26 +349,39 @@ stateRemote.OnClientEvent:Connect(function(newState)
 	refreshStandPrompts()
 end)
 
+selectedRemote.OnClientEvent:Connect(function(slot)
+	ui.held:set(slot)
+end)
+
 carryRemote.OnClientEvent:Connect(function(mineralId)
 	ui.carry:set(mineralId)
 	refreshPrompts()
 end)
 
-local noticeId = 0
-noticeRemote.OnClientEvent:Connect(function(text)
-	noticeId += 1
-	local id = noticeId
-	ui.notice:set(text)
-	task.delay(4, function()
-		if noticeId == id then
-			ui.notice:set("")
-		end
-	end)
+noticeRemote.OnClientEvent:Connect(showNotice)
+
+giftOfferRemote.OnClientEvent:Connect(function(id, fromName, mineralId)
+	ui.giftOffer:set({ Id = id, From = fromName, MineralId = mineralId })
+end)
+giftCloseRemote.OnClientEvent:Connect(function(id)
+	local offer = Fusion.peek(ui.giftOffer)
+	if offer and offer.Id == id then
+		ui.giftOffer:set(false)
+	end
 end)
 
 local shopPosition = nil
 openShopRemote.OnClientEvent:Connect(function(kind, id, position)
 	shopPosition = position
+	if kind == "Fusion" or kind == "Rebirth" then
+		ui.shopKind:set("")
+		ui.robuxKind:set("")
+		ui.fuseOpen:set(kind == "Fusion")
+		ui.rebirthOpen:set(kind == "Rebirth")
+		return
+	end
+	ui.fuseOpen:set(false)
+	ui.rebirthOpen:set(false)
 	if kind == "Robux" then
 		ui.shopKind:set("")
 		ui.robuxKind:set(id)
@@ -285,41 +400,47 @@ task.spawn(function()
 		local hrp = character and character:FindFirstChild("HumanoidRootPart")
 		if hrp then
 			ui.depth:set(math.floor(math.max(hrp.Position.X, 0)))
-			local shopIsOpen = Fusion.peek(ui.shopKind) ~= "" or Fusion.peek(ui.robuxKind) ~= ""
+			local shopIsOpen = Fusion.peek(ui.shopKind) ~= "" or Fusion.peek(ui.robuxKind) ~= "" or Fusion.peek(ui.fuseOpen) or Fusion.peek(ui.rebirthOpen)
 			if shopPosition and shopIsOpen and (hrp.Position - shopPosition).Magnitude > SHOP_CLOSE_DISTANCE then
 				ui.shopKind:set("")
 				ui.robuxKind:set("")
-			end
-			if standPosition and Fusion.peek(ui.placeStand) > 0 and (hrp.Position - standPosition).Magnitude > 30 then
-				ui.placeStand:set(0)
+				ui.fuseOpen:set(false)
+				ui.rebirthOpen:set(false)
 			end
 		end
 	end
 end)
 
--- Atajos de prueba (solo en Studio): teclas 1 a 5 = ir a esa zona, tecla 0 = +10.000 créditos.
-if RunService:IsStudio() then
-	local zoneKeys = {
-		[Enum.KeyCode.One] = 1,
-		[Enum.KeyCode.Two] = 2,
-		[Enum.KeyCode.Three] = 3,
-		[Enum.KeyCode.Four] = 4,
-		[Enum.KeyCode.Five] = 5,
-	}
-	UserInputService.InputBegan:Connect(function(input, processedByUi)
-		if processedByUi then
-			return
+-- Panel de administrador: el servidor decide quién es admin y valida cada orden.
+local function refreshAdminPlayers()
+	local list = {}
+	local targetStillHere = false
+	for _, other in Players:GetPlayers() do
+		table.insert(list, { UserId = other.UserId, Name = other.DisplayName })
+		if other.UserId == Fusion.peek(ui.adminTarget) then
+			targetStillHere = true
 		end
-		local zone = zoneKeys[input.KeyCode]
-		if zone then
-			devRemote:FireServer("Zone", zone)
-		elseif input.KeyCode == Enum.KeyCode.Zero then
-			devRemote:FireServer("Money")
-		elseif input.KeyCode == Enum.KeyCode.Nine then
-			devRemote:FireServer("Mineral")
-		end
-	end)
+	end
+	ui.adminPlayers:set(list)
+	if not targetStillHere then
+		ui.adminTarget:set(player.UserId)
+	end
 end
+refreshAdminPlayers()
+Players.PlayerAdded:Connect(refreshAdminPlayers)
+Players.PlayerRemoving:Connect(function()
+	task.defer(refreshAdminPlayers)
+end)
+
+adminStatusRemote.OnClientEvent:Connect(function(isAdmin)
+	ui.isAdmin:set(isAdmin == true)
+end)
+
+UserInputService.InputBegan:Connect(function(input, processedByUi)
+	if not processedByUi and input.KeyCode == Enum.KeyCode.Backquote and Fusion.peek(ui.isAdmin) then
+		ui.adminOpen:set(not Fusion.peek(ui.adminOpen))
+	end
+end)
 
 requestRemote:FireServer()
 
@@ -330,7 +451,34 @@ HUD.mount(player:WaitForChild("PlayerGui"), ui, {
 	onSell = function(index)
 		sellRemote:FireServer(index)
 	end,
-	onPlace = function(standIndex, inventoryIndex)
-		placeRemote:FireServer(standIndex, inventoryIndex)
+	onSelectSlot = selectSlot,
+	onFuse = function(rarityId)
+		fuseRemote:FireServer(rarityId)
+	end,
+	onRebirth = function()
+		rebirthRemote:FireServer()
+	end,
+	onSellAll = function()
+		sellAllRemote:FireServer()
+	end,
+	onBuyRobux = function(kind)
+		buyRobuxRemote:FireServer(kind)
+	end,
+	onGift = function(userId, index)
+		giftRequestRemote:FireServer(userId, index)
+	end,
+	onGiftAnswer = function(offerId, accept)
+		giftAnswerRemote:FireServer(offerId, accept)
+		ui.giftOffer:set(false)
 	end,
 })
+
+-- El panel va al final: si fallara, no impide jugar.
+local adminOk, adminError = pcall(function()
+	AdminPanel.mount(player:WaitForChild("PlayerGui"), ui, function(command, targetUserId, a, b)
+		adminRemote:FireServer(command, targetUserId, a, b)
+	end)
+end)
+if not adminOk then
+	warn("[AdminPanel] No se pudo crear el panel:", adminError)
+end

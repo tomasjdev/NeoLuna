@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Economy = require(script.Parent.Economy)
+local HeldMineral = require(script.Parent.HeldMineral)
 local Props = require(script.Parent.Props)
 local WorldBuilder = require(script.Parent.WorldBuilder)
 
@@ -92,6 +93,8 @@ local function spawnNode(zone)
 	piece("CrystalSmall", Enum.PartType.Block, Vector3.new(1.4, 3, 1.4), Vector3.new(1.8, 3, 0.5), CFrame.Angles(0, math.rad(20), math.rad(-18)), NEUTRAL_CRYSTAL, Enum.Material.Glass, 0.1)
 
 	model.PrimaryPart = rock
+	-- Con streaming, el cristal llega completo (no pieza por pieza) y el cliente lo pinta bien.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model:SetAttribute("Zone", zone)
 	model:SetAttribute("Seed", rng:NextInteger(1, 1000000))
 	model.Parent = nodeFolder
@@ -177,6 +180,18 @@ end
 local function caught(player, carry, hrp)
 	local ufo = carry.Ufo
 	carry.Ufo = nil -- que clearCarry no lo destruya: se va volando
+	if Economy.UseShield(player) then
+		-- El escudo anti-Alien: el mineral se salva y se guarda en la mochila.
+		deliver(player, carry)
+		notice(player, "¡Tu escudo te salvó del ovni!")
+		if ufo then
+			task.spawn(function()
+				flyModel(ufo, ufo:GetPivot() + Vector3.new(0, 80, 0), 1.5)
+				ufo:Destroy()
+			end)
+		end
+		return
+	end
 	clearCarry(player)
 	hrp.CFrame = CFrame.new(WorldBuilder.ReturnPosition)
 	notice(player, "¡El ovni se llevó tu mineral! Entra a la mina otra vez.")
@@ -275,7 +290,7 @@ function MineService.StartMining(player, node)
 	if not (data and hrp and humanoid) then
 		return
 	end
-	if #data.Inventory >= Config.InventorySize then
+	if Economy.FreeSlots(player) <= 0 then
 		notice(player, "¡Mochila llena! Vende algo primero.")
 		return
 	end
@@ -296,6 +311,7 @@ function MineService.StartMining(player, node)
 		Alive = true,
 	}
 	mining[player] = session
+	HeldMineral.Clear(player) -- las manos son para el pico
 
 	hrp.CFrame = CFrame.lookAt(hrp.Position, Vector3.new(nodePosition.X, hrp.Position.Y, nodePosition.Z))
 	startVisuals(player, session, humanoid)

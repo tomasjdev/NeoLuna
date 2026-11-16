@@ -72,6 +72,13 @@ function BuildingModels.Shop(origin, text, accent)
 	piece(model, origin, Vector3.new(-4, 2.5, -6.1), Vector3.new(3.4, 5, 0.5), BLUE)
 	piece(model, origin, Vector3.new(4, 3.6, -6.1), Vector3.new(5, 3.6, 0.5), SKY, { Material = Enum.Material.Glass })
 	textBoard(model, origin, Vector3.new(0, 11.2, -5.5), Vector3.new(9, 2.6, 0.6), text, c(38, 42, 52), accent)
+
+	-- La tienda es sólida: no se puede atravesar.
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			descendant.CanCollide = true
+		end
+	end
 	return model
 end
 

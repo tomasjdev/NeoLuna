@@ -45,6 +45,19 @@ domo con renacimientos). Ese diseño se descartó.
 - **[mi decisión]** Si entran más de 5, los extra aparecen en la plaza sin base.
   El máximo de jugadores del servidor se fija en Configuración del juego de Roblox.
 
+## Panel de administrador
+Decisión del dueño: un menú **solo para él o para quien él decida hacer admin**, para dar
+dinero, regalar dinero y hacer lo que quiera dentro del juego. Los atajos de prueba de hoy
+(solo Studio) pasarán a este panel y funcionarán también en el juego publicado.
+- Quién es admin: una lista de UserIds en `Config.AdminUserIds` (el dueño, 3282659647, y a
+  quien él agregue). **[mi decisión]** en Studio quien prueba y el dueño del juego publicado
+  también cuentan como admin. **Construido.**
+- Todo se valida en el servidor (un jugador normal no puede usarlo ni viéndolo). El botón
+  del panel solo aparece para admins.
+- **[mi decisión, por confirmar]** Funciones iniciales: dar o quitar dinero (a sí mismo o a
+  otro jugador), dar minerales, subir o bajar niveles de mejoras, ir a una zona de la mina,
+  ver el informe de los estantes.
+
 ## Mejoras (se compran con dinero)
 - **Velocidad**: lo rápido que corre el jugador. Es clave para escapar del ovni.
 - **Fuerza**: lo rápido que pica. **[mi decisión]** acorta el tiempo que hay que
@@ -85,13 +98,62 @@ con buena probabilidad si el pico es bueno.
 - **Ingreso automático (esto es lo que hace de esto un tycoon):** cada mineral que
   tienes en un puesto **genera créditos solo**, según qué mineral es; los más raros
   generan más. Se puede **vender** (te pagan de una vez) o **dejar en un puesto**
-  (genera de a poco, para siempre). **[mi decisión, por confirmar]** el ingreso por
-  segundo de un mineral es su valor de venta dividido en 900 (se paga solo en unos
-  15 minutos), y los detalles de cómo se cobra están por definir.
-- El cartel de la base muestra cuánto está ganando el jugador por segundo.
+  (genera de a poco, para siempre). **Ingreso (decisión del dueño + mi escala):** un mineral
+  común genera **3 créditos por segundo** (el mínimo) y cada rareza genera **3 veces más**
+  que la anterior: poco común 9/s, raro 27/s, épico 81/s, exótico 243/s, legendario 729/s.
+  Así se nota el cambio apenas el jugador cobra. Un estante junta como máximo 2 horas de
+  ingresos.
+- **Economía (mi escala, ajustable en Config):** el valor de venta de un mineral es más o
+  menos 1 minuto de lo que genera (común ~150-220, poco común ~480-600, raro ~1.400-1.850,
+  épico ~4.200-5.400, exótico ~12.500-16.500, legendario ~38.000-48.000). Mejoras:
+  Velocidad desde 250 (x1,7 por nivel), Fuerza desde 400 (x1,8), Pico desde 1.500 (x5).
+  Dinero inicial: 100. Los pisos se precian cuando se construyan.
+- **Todos** los minerales generan créditos cada segundo, sean comunes o raros. La
+  interfaz **no muestra cuánto genera** cada mineral ni la base (decisión del dueño);
+  el cartel de la base muestra el nombre del jugador y su dinero.
+- Cobrar: una placa en el suelo frente a cada estante; el texto va pintado sobre ella.
+- **Dejar un mineral en un estante** (decisión del dueño): mantener E junto al estante
+  (deja el mineral elegido, o el primero), o pulsar 1 a 5 cerca de un estante vacío
+  (deja el mineral de ese espacio de la barra). Mantener E en un estante ocupado lo retira.
+  Sobre el estante solo se ve el cristal del mineral, sin textos.
 - **Fusión**: solo minerales **raros, exóticos y superiores**; los normales no
   se pueden fusionar. **[mi decisión]** 3 minerales iguales de rareza Raro o
   superior dan 1 mineral de la rareza siguiente.
+
+## Balance actual (15 zonas) **[mi decisión, ajustable en Config.luau]**
+- **15 zonas** de 200 studs (mina de 3.000). La rareza de cada zona sale de una curva: cada
+  rareza es más común en su "zona central" (Común 1, Poco común 3-4, Raro 6-7, Épico 9-10,
+  Exótico 12-13, Legendario 15+); los Comunes y Poco comunes nunca desaparecen del todo.
+- **Velocidad mínima por zona** (nivel): 0, 2, 3, 4, 6, 7, 9, 10, 11, 13, 14, 16, 17, 19, 20.
+  El ovni va 3 studs/s más rápido que un jugador con ese nivel; con el nivel mínimo o más no
+  alcanza, con menos puede alcanzarte (tiene que haber 50 studs de ventaja: aparece a 50 detrás).
+- **Costos:** Velocidad 2.500 × 1,65^nivel; Fuerza 5.000 × 1,7^nivel; Pico 15.000 × 4,5^nivel;
+  pisos 200 mil / 1,2 M / 7 M / 40 M; estantes 15 mil / 60 mil / 250 mil / 1 M / 4 M (se
+  duplica en cada estante). Tiempo de picado: 1 s + 0,25 s por zona.
+- Simulación (jugador que compra lo más barato útil): zona 2 a los ~4 min, zona 5 a ~45 min,
+  zona 10 a ~3,3 h, zona 15 a ~9 h. Pendiente de probar con jugadores reales.
+
+## Pisos y estantes (decisión del dueño; números **[mi decisión]**, ajustar en el balance)
+- La base tiene hasta 5 pisos (Config.MaxFloors), de 8 estantes cada uno. El piso 1 viene con
+  la base; los demás flotan encima (30 studs) y se suben por una **escalera vertical** al fondo de la base (centro del lado oeste) y se apoyan en
+  columnas en las esquinas. **Fusión**: un solo horno en el centro de la plaza, lo usa cualquiera con sus propios minerales (nadie puede robar, no hay robo
+  en el juego); 3 minerales de la misma rareza (Raro o superior) dan 1 de la siguiente.
+- Cada piso comprado viene con **4 estantes desbloqueados**; los otros 4 se desbloquean **de a
+  uno, en orden, pagando**. Se compran en la terminal "NUEVO PISO" de la base y en el propio
+  estante bloqueado (mantener E).
+- Precios de piso: 20.000 / 120.000 / 700.000 / 4.000.000. Estante (5º a 8º): base del piso
+  (1.500 / 6.000 / 25.000 / 100.000 / 400.000) y se duplica con cada estante.
+
+## Renacimiento (decisión del dueño; números **[mi decisión]**) — construido
+- Al renacer **solo se pierde el dinero**; mejoras, minerales, pisos y estantes se conservan.
+- Cada renacimiento da un **multiplicador permanente a lo que generan los estantes**, mayor
+  con cada uno, y **cada renacimiento cuesta más que el anterior**.
+- Máximo 10; **el costo es proporcional a lo que gana el jugador**: el primero cuesta 2 horas de
+  lo que generan sus estantes (con el multiplicador que ya tiene) y cada renacimiento suma un
+  30 % más de horas que el anterior (2 h, 2,6 h, 3,4 h...). Se usa el máximo que han generado
+  (PeakIncome) para que quitar minerales no lo abarate; mínimo $50.000. +50 % de ganancia en los
+  estantes por renacimiento (hasta ×6). Se renace en el altar de la plaza; la base muestra ★N
+  junto al nombre. Al renacer se cobra antes lo que juntaron los estantes. Admin: +1, -1, Máx, 0.
 
 ## Inventario, tienda y regalos
 - El inventario recibe el mineral al cruzar la línea.

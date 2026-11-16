@@ -1,11 +1,14 @@
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Admin = require(script.Parent.Admin)
 local Bases = require(script.Parent.Bases)
 local Economy = require(script.Parent.Economy)
+local Gifts = require(script.Parent.Gifts)
+local HeldMineral = require(script.Parent.HeldMineral)
 local MineService = require(script.Parent.MineService)
+local Robux = require(script.Parent.Robux)
 local WorldBuilder = require(script.Parent.WorldBuilder)
 
 local SHOP_USE_DISTANCE = 35 -- a qué distancia de la tienda se puede vender y mejorar
@@ -26,34 +29,63 @@ end
 -- servidor -> cliente
 local stateRemote = newRemote("StateChanged")
 newRemote("Notice")
+local adminStatusRemote = newRemote("AdminStatus") -- le dice al cliente si es admin
+newRemote("Selected") -- espacio de la barra que llevas en la mano (0 = ninguno)
 newRemote("Carry")
 newRemote("NodeBroken")
 local openShopRemote = newRemote("OpenShop")
 -- cliente -> servidor
 local requestRemote = newRemote("RequestState")
 newRemote("MineStart")
+newRemote("SelectSlot") -- elegir qué mineral de la barra llevar en la mano
 newRemote("MineCancel")
-local devRemote = newRemote("DevCommand") -- atajos de prueba, solo funcionan en Studio
+newRemote("AdminCommand") -- órdenes del panel de administrador (el servidor comprueba el permiso)
 local buyUpgradeRemote = newRemote("BuyUpgrade")
 local sellRemote = newRemote("SellMineral")
+local sellAllRemote = newRemote("SellAll")
+newRemote("BuyRobux") -- cliente -> servidor: comprar un pase o producto de Robux
 local placeRemote = newRemote("PlaceMineral")
 local removeRemote = newRemote("RemoveMineral")
+local fuseRemote = newRemote("FuseMinerals")
+local rebirthRemote = newRemote("RebirthRequest")
+newRemote("GiftOffer") -- servidor -> cliente: alguien te quiere regalar un mineral
+newRemote("GiftClose") -- servidor -> cliente: la oferta terminó
+newRemote("GiftRequest") -- cliente -> servidor: regalar un mineral de la mochila
+newRemote("GiftAnswer") -- cliente -> servidor: aceptar o rechazar
 
 local world = WorldBuilder.Build()
-Bases.Init(world.Bases, function(player, standIndex)
-	local amount = Economy.CollectStand(player, standIndex)
-	if amount >= 1 then
-		remotes.Notice:FireClient(player, ("+%d cr"):format(math.floor(amount)))
-	end
-end)
+Bases.Init(world.Bases, {
+	Collect = function(player, standIndex)
+		local amount = Economy.CollectStand(player, standIndex)
+		if amount >= 1 then
+			remotes.Notice:FireClient(player, "+" .. Config.FormatMoney(amount))
+		end
+	end,
+	Unlock = function(player, floor)
+		local _, message = Economy.UnlockStand(player, floor)
+		if message then
+			remotes.Notice:FireClient(player, message)
+		end
+	end,
+	BuyFloor = function(player)
+		local _, message = Economy.BuyFloor(player)
+		if message then
+			remotes.Notice:FireClient(player, message)
+		end
+	end,
+})
 MineService.Init(remotes)
+HeldMineral.Init(remotes)
+Admin.Init(remotes)
+Gifts.Init(remotes)
+Robux.Init(remotes)
 
 local function applyWalkSpeed(player)
 	local data = Economy.Get(player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if data and humanoid then
-		humanoid.WalkSpeed = Config.GetWalkSpeed(data.Speed)
+		humanoid.WalkSpeed = Config.GetWalkSpeed(data.Speed, data.Passes.Boots == true)
 	end
 end
 
@@ -61,6 +93,7 @@ Economy.OnChanged = function(player, data)
 	stateRemote:FireClient(player, data)
 	applyWalkSpeed(player)
 	Bases.Update(player, data)
+	HeldMineral.Refresh(player, data)
 end
 
 -- Solo se vende y mejora cerca de alguna tienda de mejoras.
@@ -85,37 +118,64 @@ for _, shop in world.Shops do
 	end)
 end
 
+-- Horno de fusion: uno solo en la plaza; lo usa cualquiera con sus propios minerales.
+local function nearFuser(player)
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	return hrp ~= nil and (hrp.Position - world.Fuse.Position).Magnitude <= SHOP_USE_DISTANCE
+end
+
+world.Fuse.Prompt.Triggered:Connect(function(player)
+	openShopRemote:FireClient(player, "Fusion", "Fusion", world.Fuse.Position)
+end)
+
+-- Altar de renacimiento (plaza).
+world.Fuse.Rebirth.Prompt.Triggered:Connect(function(player)
+	openShopRemote:FireClient(player, "Rebirth", "Rebirth", world.Fuse.Rebirth.Position)
+end)
+
+rebirthRemote.OnServerEvent:Connect(function(player)
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	if not hrp or (hrp.Position - world.Fuse.Rebirth.Position).Magnitude > SHOP_USE_DISTANCE then
+		return
+	end
+	local _, message = Economy.Rebirth(player)
+	if message then
+		remotes.Notice:FireClient(player, message)
+	end
+end)
+
+fuseRemote.OnServerEvent:Connect(function(player, rarityId)
+	if not nearFuser(player) then
+		return
+	end
+	local ok, result = Economy.Fuse(player, rarityId)
+	if ok then
+		remotes.Notice:FireClient(player, ("¡Fusión! Obtuviste: %s"):format(result.Name))
+	elseif result then
+		remotes.Notice:FireClient(player, result)
+	end
+end)
+
 buyUpgradeRemote.OnServerEvent:Connect(function(player, kind)
 	if nearUpgradeShop(player) then
 		Economy.PurchaseUpgrade(player, kind)
 	end
 end)
 
-sellRemote.OnServerEvent:Connect(function(player, index)
+sellAllRemote.OnServerEvent:Connect(function(player)
 	if nearUpgradeShop(player) then
-		Economy.Sell(player, index)
+		local total, count = Economy.SellAll(player)
+		if count > 0 then
+			remotes.Notice:FireClient(player, ("Vendiste %d minerales por %s"):format(count, Config.FormatMoney(total)))
+		end
 	end
 end)
 
--- Atajos para probar en Studio: teletransportarse a una zona y ganar dinero.
-devRemote.OnServerEvent:Connect(function(player, command, value)
-	if not RunService:IsStudio() then
-		return
-	end
-	if command == "Zone" and type(value) == "number" then
-		local character = player.Character
-		local hrp = character and character:FindFirstChild("HumanoidRootPart")
-		if hrp then
-			local zone = math.clamp(math.floor(value), 1, Config.ZoneCount)
-			hrp.CFrame = CFrame.new((zone - 1) * Config.ZoneLength + 25, 5, 0)
-			remotes.Notice:FireClient(player, ("[Prueba] Zona %d"):format(zone))
-		end
-	elseif command == "Money" then
-		Economy.AddMoney(player, 10000)
-		remotes.Notice:FireClient(player, "[Prueba] +10.000 créditos")
-	elseif command == "Mineral" then
-		local ok = Economy.AddMineral(player, "AlienCrystal")
-		remotes.Notice:FireClient(player, if ok then "[Prueba] +1 Cristal alienígena" else "[Prueba] Mochila llena")
+sellRemote.OnServerEvent:Connect(function(player, index)
+	if nearUpgradeShop(player) then
+		Economy.Sell(player, index)
 	end
 end)
 
@@ -149,13 +209,27 @@ end)
 task.spawn(function()
 	while true do
 		task.wait(1)
+		local richest, richestMoney = nil, -1
 		for _, player in Players:GetPlayers() do
-			Bases.Update(player, Economy.Get(player))
+			local data = Economy.Get(player)
+			Bases.Update(player, data)
+			if data and data.Money > richestMoney then
+				richest, richestMoney = player, data.Money
+			end
 		end
+
+		-- Cartel del jugador con mas dinero (foto de perfil y nombre).
+		local top = world.Fuse.Top
+		if richest then
+			top.Image.Image = ("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150"):format(richest.UserId)
+			top.Name.Text = richest.DisplayName
+		end
+		top.Gui.Enabled = richest ~= nil
 	end
 end)
 
 requestRemote.OnServerEvent:Connect(function(player)
+	adminStatusRemote:FireClient(player, Admin.IsAdmin(player))
 	local data = Economy.Get(player)
 	if data then
 		stateRemote:FireClient(player, data)
@@ -165,9 +239,12 @@ end)
 local function onPlayerAdded(player)
 	Bases.Assign(player) -- antes de que aparezca el personaje
 	player.CharacterAdded:Connect(function()
+		HeldMineral.Clear(player)
 		applyWalkSpeed(player)
 	end)
-	Economy.Load(player)
+	if Economy.Load(player) then
+		Robux.CheckPasses(player)
+	end
 end
 
 Players.PlayerAdded:Connect(onPlayerAdded)
@@ -176,6 +253,7 @@ for _, player in Players:GetPlayers() do
 end
 
 Players.PlayerRemoving:Connect(function(player)
+	Gifts.PlayerLeaving(player)
 	Bases.Release(player)
 	Economy.Remove(player)
 end)
