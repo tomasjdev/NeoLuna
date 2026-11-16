@@ -345,25 +345,25 @@ Config.RobuxProducts = {
 		Name = "Doble de dinero",
 		Description = "Ganas el doble de dinero en todo: ventas y estantes. ¡Para siempre!",
 		Kind = "Pass",
-		Id = 0,
+		Id = 2089265407,
 	},
 	Boots = {
 		Name = "Botas lunares VIP",
 		Description = "Corres un 25 % más rápido, para siempre. ¡Escapa mejor del Alien!",
 		Kind = "Pass",
-		Id = 0,
+		Id = 2089157257,
 	},
 	Shield = {
 		Name = "Escudo anti-Alien",
 		Description = "Si el Alien te atrapa, conservas tu mineral. Se gasta al usarlo.",
 		Kind = "Product",
-		Id = 0,
+		Id = 3732361306,
 	},
 	Credits = {
 		Name = "Paquetes de dinero",
 		Description = "Te da dinero al instante: lo que tus estantes generan en 30 minutos (mínimo $25,000).",
 		Kind = "Product",
-		Id = 0,
+		Id = 3732361539,
 	},
 }
 
