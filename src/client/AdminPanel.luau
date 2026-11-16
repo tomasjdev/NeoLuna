@@ -310,6 +310,7 @@ function AdminPanel.mount(parent, ui, send)
 				Button({ Size = UDim2.fromOffset(92, 34), Text = "-1", Color = RED, OnClick = function() send("AdjustRebirths", target(), -1) end }),
 				Button({ Size = UDim2.fromOffset(92, 34), Text = "Máx", Color = GREEN, OnClick = function() send("AdjustRebirths", target(), 100) end }),
 				Button({ Size = UDim2.fromOffset(92, 34), Text = "A 0", Color = RED, OnClick = function() send("AdjustRebirths", target(), -100) end }),
+				Button({ Size = UDim2.fromOffset(190, 34), Text = "Reiniciar máx. de ingreso", Color = RED, OnClick = function() send("ResetPeak", target()) end }),
 			})),
 			Section(8, "Robux (prueba sin pagar)", Wrap({
 				Button({ Size = UDim2.fromOffset(100, 34), Text = "x2 dinero: sí", OnClick = function() send("GrantRobux", target(), "X2", true) end }),

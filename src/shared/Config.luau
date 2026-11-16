@@ -160,8 +160,8 @@ Config.Rebirth = {
 	-- cuesta BaseHours horas de lo que generan sus estantes y cada renacimiento cuesta
 	-- HoursGrowth veces más horas que el anterior. Un jugador nuevo paga poco; uno que ya
 	-- gana mucho, mucho más. MinCost evita que sea gratis sin estantes.
-	BaseHours = 2,
-	HoursGrowth = 1.3,
+	BaseHours = 1.5,
+	HoursGrowth = 1.2,
 	MinCost = 50000,
 	BonusPerRebirth = 0.5, -- +50 % de ganancia en los estantes por renacimiento
 }

@@ -426,6 +426,17 @@ function Economy.Rebirth(player)
 	return true, ("¡Renacimiento %d! Tus estantes ganan x%s."):format(data.Rebirths, tostring(Config.GetRebirthMultiplier(data.Rebirths)))
 end
 
+-- Panel de administrador: reinicia lo máximo que han generado sus estantes (para pruebas).
+function Economy.AdminResetPeak(player)
+	local data = datas[player]
+	if not data then
+		return false
+	end
+	data.PeakIncome = 0
+	notify(player)
+	return true
+end
+
 -- Panel de administrador: suma o resta renacimientos (entre 0 y el máximo).
 function Economy.AdminAdjustRebirths(player, delta)
 	local data = datas[player]

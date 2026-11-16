@@ -137,6 +137,13 @@ function commands.GrantRobux(admin, target, kind, value)
 	notice(admin, ("[Admin] %s (%s)"):format(text, describe(admin, target)))
 end
 
+-- Reinicia el máximo de ingreso de estantes (afecta al costo del renacimiento).
+function commands.ResetPeak(admin, target)
+	if Economy.AdminResetPeak(target) then
+		notice(admin, ("[Admin] Máximo de ingreso reiniciado (%s)"):format(describe(admin, target)))
+	end
+end
+
 -- Lleva al jugador al inicio de una zona de la mina.
 function commands.Teleport(admin, target, zone)
 	if not isAmount(zone) then

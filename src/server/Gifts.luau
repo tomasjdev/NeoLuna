@@ -12,6 +12,7 @@ local Economy = require(script.Parent.Economy)
 local Gifts = {}
 
 local OFFER_SECONDS = 30
+local MAX_DISTANCE = 18 -- studs entre los dos jugadores
 local COOLDOWN_SECONDS = 3 -- entre un regalo y el siguiente del mismo jugador
 
 local remotes
@@ -62,6 +63,13 @@ local function request(sender, targetUserId, index)
 	end
 	local target = Players:GetPlayerByUserId(targetUserId)
 	if not target or target == sender or not Economy.Get(target) then
+		return
+	end
+	-- Solo se regala cara a cara: los dos tienen que estar cerca.
+	local senderRoot = sender.Character and sender.Character:FindFirstChild("HumanoidRootPart")
+	local targetRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+	if not senderRoot or not targetRoot or (senderRoot.Position - targetRoot.Position).Magnitude > MAX_DISTANCE then
+		notice(sender, "Acércate más a " .. target.DisplayName .. " para regalarle.")
 		return
 	end
 	if outgoing[sender] then

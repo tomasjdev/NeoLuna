@@ -442,29 +442,6 @@ function HUD.mount(parent, ui, handlers)
 				[Children] = { rounded(14) },
 			},
 			scope:New "TextButton" {
-				Name = "GiftButton",
-				LayoutOrder = 5,
-				Size = UDim2.fromOffset(376, 44),
-				BackgroundColor3 = Color3.fromRGB(235, 100, 150),
-				BorderSizePixel = 0,
-				AutoButtonColor = false,
-				Font = FONT,
-				TextSize = 20,
-				TextColor3 = WHITE,
-				Text = "Regalar a otro jugador",
-				-- Solo con la mochila abierta (no en la tienda de vender), con un mineral elegido
-				-- y otro jugador en el servidor.
-				Visible = scope:Computed(function(use)
-					return use(ui.backpackOpen) and use(ui.shopKind) ~= "Sell" and use(selectedMineral) ~= false and #use(ui.adminPlayers) > 1
-				end),
-				[OnEvent "Activated"] = function()
-					if peek(selectedMineral) ~= false then
-						ui.giftPicking:set(true)
-					end
-				end,
-				[Children] = { rounded(14) },
-			},
-			scope:New "TextButton" {
 				Name = "CloseButton",
 				LayoutOrder = 6,
 				Size = UDim2.fromOffset(376, 36),
@@ -1019,102 +996,11 @@ function HUD.mount(parent, ui, handlers)
 	}
 
 	----------------------------------------------------------------------
-	-- Regalos: elegir a quién regalar y la oferta que te hacen
+	-- Regalos: la oferta que te hacen (se regala acercándote a otro jugador con un mineral en la mano)
 	----------------------------------------------------------------------
 
 	local GIFT_COLOR = Color3.fromRGB(235, 100, 150)
 	local GREEN_BUTTON = Color3.fromRGB(45, 175, 110)
-	local localUserId = game:GetService("Players").LocalPlayer.UserId
-
-	-- Los demás jugadores del servidor (ui.adminPlayers incluye a todos; se quita el propio).
-	local otherPlayers = scope:Computed(function(use)
-		local list = {}
-		for _, info in use(ui.adminPlayers) do
-			if info.UserId ~= localUserId then
-				table.insert(list, info)
-			end
-		end
-		return list
-	end)
-
-	local pickerChildren = {
-		rounded(20),
-		scope:New "UIStroke" { Color = GIFT_COLOR, Thickness = 4 },
-		scope:New "UIPadding" {
-			PaddingTop = UDim.new(0, 14),
-			PaddingBottom = UDim.new(0, 14),
-			PaddingLeft = UDim.new(0, 14),
-			PaddingRight = UDim.new(0, 14),
-		},
-		scope:New "UIListLayout" { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) },
-		scope:New "TextLabel" {
-			LayoutOrder = 1,
-			Size = UDim2.fromOffset(300, 26),
-			BackgroundTransparency = 1,
-			Font = FONT,
-			TextSize = 20,
-			TextColor3 = TEXT,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			Text = "¿A quién se lo regalas?",
-		},
-	}
-	for slot = 1, Config.MaxPlayers - 1 do
-		table.insert(pickerChildren, scope:New "TextButton" {
-			LayoutOrder = 1 + slot,
-			Size = UDim2.fromOffset(300, 38),
-			BackgroundColor3 = GIFT_COLOR,
-			BorderSizePixel = 0,
-			AutoButtonColor = false,
-			Font = FONT,
-			TextSize = 17,
-			TextColor3 = WHITE,
-			Visible = scope:Computed(function(use)
-				return use(otherPlayers)[slot] ~= nil
-			end),
-			Text = scope:Computed(function(use)
-				local info = use(otherPlayers)[slot]
-				return if info then info.Name else ""
-			end),
-			[OnEvent "Activated"] = function()
-				local info = peek(otherPlayers)[slot]
-				local index = peek(ui.selected)
-				if info and index > 0 then
-					handlers.onGift(info.UserId, index)
-					ui.giftPicking:set(false)
-					ui.selected:set(0)
-				end
-			end,
-			[Children] = { rounded(12) },
-		})
-	end
-	table.insert(pickerChildren, scope:New "TextButton" {
-		LayoutOrder = 20,
-		Size = UDim2.fromOffset(300, 34),
-		BackgroundColor3 = DISABLED,
-		BorderSizePixel = 0,
-		AutoButtonColor = false,
-		Font = FONT,
-		TextSize = 17,
-		TextColor3 = WHITE,
-		Text = "Cancelar",
-		[OnEvent "Activated"] = function()
-			ui.giftPicking:set(false)
-		end,
-		[Children] = { rounded(12) },
-	})
-
-	local giftPicker = scope:New "Frame" {
-		Name = "GiftPicker",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.45),
-		Size = UDim2.fromOffset(328, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = WHITE,
-		BorderSizePixel = 0,
-		Visible = ui.giftPicking,
-		[Children] = pickerChildren,
-	}
-
 	-- Oferta que te hacen: aceptar o rechazar.
 	local giftOfferPanel = scope:New "Frame" {
 		Name = "GiftOffer",
@@ -1210,7 +1096,7 @@ function HUD.mount(parent, ui, handlers)
 		Name = "NeoLunaHUD",
 		ResetOnSpawn = false,
 		Parent = parent,
-		[Children] = { moneyPanel, statusPanel, noticePanel, hotbar, backpackPanel, shopPanel, robuxPanel, fusePanel, rebirthPanel, giftPicker, giftOfferPanel },
+		[Children] = { moneyPanel, statusPanel, noticePanel, hotbar, backpackPanel, shopPanel, robuxPanel, fusePanel, rebirthPanel, giftOfferPanel },
 	}
 
 	return scope

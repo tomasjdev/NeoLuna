@@ -239,7 +239,7 @@ end
 local function placeHeldMineral(standIndex)
 	local slot = Fusion.peek(ui.held)
 	if slot < 1 then
-		showNotice("Toma un mineral con las teclas 1 a 5 para dejarlo.")
+		showNotice("Debes tener un mineral en la mano para dejarlo.")
 		return
 	end
 	placeRemote:FireServer(standIndex, slot)
@@ -311,6 +311,58 @@ task.spawn(function()
 		task.wait(0.3)
 	end
 end)
+
+-- Regalar: con un mineral en la mano, aparece "Regalar" sobre los demás jugadores (con E, o
+-- tocando el botón en celular). El servidor revisa todo; el otro jugador acepta o rechaza.
+local giftPrompts = {} -- jugador -> prompt
+
+local function refreshGiftPrompts()
+	local holding = Fusion.peek(ui.held) > 0
+	for _, prompt in giftPrompts do
+		prompt.Enabled = holding
+	end
+end
+
+local function attachGiftPrompt(other)
+	if other == player then
+		return
+	end
+	local function onCharacter(character)
+		local root = character:WaitForChild("HumanoidRootPart", 10)
+		if not root then
+			return
+		end
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Regalar mineral"
+		prompt.ObjectText = other.DisplayName
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.HoldDuration = 0.4
+		prompt.MaxActivationDistance = 10
+		prompt.RequiresLineOfSight = false
+		prompt.Enabled = Fusion.peek(ui.held) > 0
+		prompt.Parent = root
+		giftPrompts[other] = prompt
+		prompt.Triggered:Connect(function()
+			local slot = Fusion.peek(ui.held)
+			if slot > 0 then
+				giftRequestRemote:FireServer(other.UserId, slot)
+			end
+		end)
+	end
+	if other.Character then
+		task.spawn(onCharacter, other.Character)
+	end
+	other.CharacterAdded:Connect(onCharacter)
+end
+
+for _, other in Players:GetPlayers() do
+	attachGiftPrompt(other)
+end
+Players.PlayerAdded:Connect(attachGiftPrompt)
+Players.PlayerRemoving:Connect(function(other)
+	giftPrompts[other] = nil
+end)
+scope:Observer(ui.held):onChange(refreshGiftPrompts)
 
 -- Elige (o suelta) el mineral de un espacio de la barra: el personaje lo lleva en la mano.
 -- Pulsar el mismo espacio otra vez lo suelta.
