@@ -24,13 +24,16 @@ end
 -- Ids de sonido (assets de Roblox). 0 = sin sonido. Music y Chase son música en bucle; el resto
 -- son efectos: Mine (picar, en bucle mientras mantienes E), Place (dejar/retirar un mineral en un
 -- estante), Gain (cobrar dinero) y Alarm (aparece el ovni).
+-- Opciones elegidas (las otras 2 de cada una están en docs/sonidos, por si alguna no suena):
+--   Music: Lunar Tranquil Passage · Chase: ESCAPE 2 · Mine: Rock Hit Dirt Impact 3
+--   Place: Wood Impacts 2X4 Planks 17 · Gain: retro coin pickup · Alarm: segmentEjectAlarm
 Config.Sounds = {
-	Music = 0,
-	Chase = 0,
-	Mine = 0,
-	Place = 0,
-	Gain = 0,
-	Alarm = 0,
+	Music = 125272129788388,
+	Chase = 109282360870626,
+	Mine = 9118597103,
+	Place = 9120914295,
+	Gain = 93529351909119,
+	Alarm = 109243013434470,
 }
 
 Config.StartingMoney = 100

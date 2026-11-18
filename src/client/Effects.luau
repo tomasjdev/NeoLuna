@@ -305,7 +305,7 @@ function Effects.mount(playerGui)
 	new("UIScale", { Scale = 1 }, banner)
 
 	-- Música de fondo y de persecución (si hay Ids en Config.Sounds).
-	for name, volume in { Music = 0.25, Chase = 0.45 } do
+	for name, volume in { Music = 0.25, Chase = 0.3 } do
 		local sound = startLoop(name, volume)
 		if sound then
 			music[name] = sound
