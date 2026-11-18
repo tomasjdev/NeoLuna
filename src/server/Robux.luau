@@ -72,8 +72,10 @@ function Robux.CheckPasses(player)
 				local ok, owns = pcall(function()
 					return MarketplaceService:UserOwnsGamePassAsync(player.UserId, product.Id)
 				end)
-				if ok and owns and player.Parent == Players then
-					Economy.GrantPass(player, kind, true)
+				-- Roblox es quien decide: si tiene el pase se activa, y si no, se quita (así los pases
+				-- que se dieron desde el panel de admin para probar no quedan guardados para siempre).
+				if ok and player.Parent == Players then
+					Economy.GrantPass(player, kind, owns == true)
 				end
 			end)
 		end

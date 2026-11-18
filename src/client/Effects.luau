@@ -291,7 +291,7 @@ function Effects.mount(playerGui)
 
 	banner = new("TextLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0, 165),
+		Position = UDim2.new(0.5, 0, 0, 215), -- debajo de los avisos de texto
 		Size = UDim2.fromOffset(640, 58),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.FredokaOne,

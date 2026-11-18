@@ -307,7 +307,7 @@ function HUD.mount(parent, ui, handlers)
 	local noticePanel = scope:New "TextLabel" {
 		Name = "Notice",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 74),
+		Position = UDim2.new(0.5, 0, 0, 100), -- debajo del letrero de la zona
 		Size = UDim2.fromOffset(500, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = WHITE,
