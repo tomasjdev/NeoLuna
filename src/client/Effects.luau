@@ -19,6 +19,9 @@ local mineSound
 local banner
 local edges = {} -- los 4 bordes rojos
 local bannerOn = false -- el banner del ovni está parpadeando
+local stack -- columna de avisos (arriba al centro): banner del ovni, bienvenida y avisos de texto
+local noticeOrder = 0
+local activeNotices = {}
 
 local function new(className, props, parent)
 	local instance = Instance.new(className)
@@ -146,20 +149,23 @@ function Effects.gain(text)
 	end)
 end
 
--- Tarjeta de "bienvenido de vuelta", arriba al centro.
+-- Todo aviso del centro de arriba (banner del ovni, bienvenida y avisos de texto) va en una
+-- misma columna, uno debajo del otro, así que nunca se encima nada.
+
+-- Tarjeta de "bienvenido de vuelta".
 function Effects.welcome(amountText)
-	if not gui then
+	if not stack then
 		return
 	end
-	local card = new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, -120),
+	local card = new("CanvasGroup", {
+		LayoutOrder = 2,
 		Size = UDim2.fromOffset(380, 72),
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 		BorderSizePixel = 0,
-	}, gui)
+		GroupTransparency = 1,
+	}, stack)
 	new("UICorner", { CornerRadius = UDim.new(0, 18) }, card)
-	new("UIStroke", { Color = Color3.fromRGB(255, 200, 60), Thickness = 4 }, card)
+	local stroke = new("UIStroke", { Color = Color3.fromRGB(255, 200, 60), Thickness = 4, Transparency = 1 }, card)
 	new("TextLabel", {
 		Position = UDim2.fromOffset(0, 8),
 		Size = UDim2.new(1, 0, 0, 28),
@@ -178,13 +184,73 @@ function Effects.welcome(amountText)
 		TextColor3 = Color3.fromRGB(40, 175, 90),
 		Text = amountText,
 	}, card)
-	tween(card, 0.5, { Position = UDim2.new(0.5, 0, 0, 90) }, Enum.EasingStyle.Back)
+	tween(card, 0.4, { GroupTransparency = 0 })
+	tween(stroke, 0.4, { Transparency = 0 })
 	task.delay(7, function()
-		tween(card, 0.6, { Position = UDim2.new(0.5, 0, 0, -120) })
-		task.delay(0.7, function()
+		tween(card, 0.5, { GroupTransparency = 1 })
+		tween(stroke, 0.5, { Transparency = 1 })
+		task.delay(0.6, function()
 			card:Destroy()
 		end)
 	end)
+end
+
+-- Aviso de texto (hasta 3 a la vez, apilados). Devuelve false si la pantalla de efectos no existe.
+function Effects.notice(text)
+	if not stack then
+		return false
+	end
+	noticeOrder += 1
+	local group = new("CanvasGroup", {
+		LayoutOrder = 10 + noticeOrder,
+		AutomaticSize = Enum.AutomaticSize.XY,
+		Size = UDim2.fromOffset(0, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BorderSizePixel = 0,
+		GroupTransparency = 1,
+	}, stack)
+	new("UICorner", { CornerRadius = UDim.new(0, 14) }, group)
+	new("UIPadding", {
+		PaddingTop = UDim.new(0, 9),
+		PaddingBottom = UDim.new(0, 9),
+		PaddingLeft = UDim.new(0, 16),
+		PaddingRight = UDim.new(0, 16),
+	}, group)
+	local label = new("TextLabel", {
+		AutomaticSize = Enum.AutomaticSize.XY,
+		Size = UDim2.fromOffset(0, 0),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		TextSize = 20,
+		TextWrapped = true,
+		TextColor3 = Color3.fromRGB(70, 50, 120),
+		Text = text,
+	}, group)
+	new("UISizeConstraint", { MaxSize = Vector2.new(520, math.huge) }, label)
+	local stroke = new("UIStroke", { Color = Color3.fromRGB(190, 165, 255), Thickness = 3, Transparency = 1 }, group)
+
+	table.insert(activeNotices, group)
+	if #activeNotices > 3 then
+		local oldest = table.remove(activeNotices, 1)
+		oldest:Destroy()
+	end
+
+	tween(group, 0.25, { GroupTransparency = 0 })
+	tween(stroke, 0.25, { Transparency = 0 })
+	task.delay(4, function()
+		if group.Parent then
+			tween(group, 0.5, { GroupTransparency = 1 })
+			tween(stroke, 0.5, { Transparency = 1 })
+			task.delay(0.6, function()
+				local index = table.find(activeNotices, group)
+				if index then
+					table.remove(activeNotices, index)
+				end
+				group:Destroy()
+			end)
+		end
+	end)
+	return true
 end
 
 ----------------------------------------------------------------------
@@ -289,9 +355,24 @@ function Effects.mount(playerGui)
 	edge(Vector2.new(0, 0), UDim2.fromScale(0, 0), UDim2.new(0.12, 0, 1, 0), 0) -- izquierda
 	edge(Vector2.new(1, 0), UDim2.fromScale(1, 0), UDim2.new(0.12, 0, 1, 0), 180) -- derecha
 
+	-- Columna de avisos arriba al centro, justo debajo del letrero de la zona (que mide hasta 138
+	-- píxeles con el tamaño de celular).
+	local touch = game:GetService("UserInputService").TouchEnabled
+	stack = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, if touch then 150 else 130),
+		Size = UDim2.fromOffset(720, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+	}, gui)
+	new("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 8),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+	}, stack)
+
 	banner = new("TextLabel", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0, 215), -- debajo de los avisos de texto
+		LayoutOrder = 1,
 		Size = UDim2.fromOffset(640, 58),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.FredokaOne,
@@ -301,7 +382,7 @@ function Effects.mount(playerGui)
 		TextStrokeTransparency = 0,
 		Visible = false,
 		Text = "",
-	}, gui)
+	}, stack)
 	new("UIScale", { Scale = 1 }, banner)
 
 	-- Música de fondo y de persecución (si hay Ids en Config.Sounds).

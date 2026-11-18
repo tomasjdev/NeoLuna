@@ -4,6 +4,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local ArtLibrary = require(script.Parent.ArtLibrary)
 
 local Props = {}
 
@@ -161,39 +162,54 @@ function Props.MineralTool(mineralId)
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
 
-	local handle = Instance.new("Part")
-	handle.Name = "Handle"
-	handle.Size = Vector3.new(1.1, 1.8, 1.1)
-	handle.Color = Config.GetRarityColor(mineralId)
-	handle.Material = Enum.Material.Glass
-	handle.Transparency = 0.05
-	handle.CanCollide = false
-	handle.CanTouch = false
-	handle.CanQuery = false
-	handle.Massless = true
+	-- El mismo diseño que en la mina, a menor escala; si no hay modelo, la gema simple de antes.
+	local handle = ArtLibrary.BuildMineral(mineralId, CFrame.identity, 0.4, Config.GetMineralColor(mineralId))
+	if handle then
+		handle.Name = "Handle"
+		handle.Anchored = false
+	else
+		handle = Instance.new("Part")
+		handle.Name = "Handle"
+		handle.Size = Vector3.new(1.1, 1.8, 1.1)
+		handle.Color = Config.GetMineralColor(mineralId)
+		handle.Material = Enum.Material.Glass
+		handle.Transparency = 0.05
+		handle.CanCollide = false
+		handle.CanTouch = false
+		handle.CanQuery = false
+		handle.Massless = true
+	end
 	handle.Parent = tool
 	return tool
 end
 
 -- Gema que flota sobre la cabeza del jugador mientras carga un mineral.
 -- Devuelve la pieza (no anclada, soldada a la cabeza); destruirla la quita.
-function Props.CarriedGem(character, color)
+function Props.CarriedGem(character, mineralId, color)
 	local head = character:FindFirstChild("Head")
 	if not head then
 		return nil
 	end
-	local gem = Instance.new("Part")
-	gem.Name = "CarriedGem"
-	gem.Shape = Enum.PartType.Ball
-	gem.Size = Vector3.one * 2.2
-	gem.Color = color
-	gem.Material = Enum.Material.Glass
-	gem.Transparency = 0.1
-	gem.CanCollide = false
-	gem.CanTouch = false
-	gem.CanQuery = false
-	gem.Massless = true
-	gem.CFrame = head.CFrame * CFrame.new(0, 3, 0)
+	-- El diseño del mineral flotando sobre la cabeza; si no hay modelo, una bola de cristal.
+	local gem = ArtLibrary.BuildMineral(mineralId, CFrame.identity, 0.5, color)
+	if gem then
+		gem.Name = "CarriedGem"
+		gem.Anchored = false
+		gem.CFrame = head.CFrame * CFrame.new(0, 3.2 + gem.Size.Y / 2, 0)
+	else
+		gem = Instance.new("Part")
+		gem.Name = "CarriedGem"
+		gem.Shape = Enum.PartType.Ball
+		gem.Size = Vector3.one * 2.2
+		gem.Color = color
+		gem.Material = Enum.Material.Glass
+		gem.Transparency = 0.1
+		gem.CanCollide = false
+		gem.CanTouch = false
+		gem.CanQuery = false
+		gem.Massless = true
+		gem.CFrame = head.CFrame * CFrame.new(0, 3, 0)
+	end
 	gem.Parent = character
 
 	local weld = Instance.new("WeldConstraint")

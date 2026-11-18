@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Admin = require(script.Parent.Admin)
+local ArtLibrary = require(script.Parent.ArtLibrary)
 local Bases = require(script.Parent.Bases)
 local Economy = require(script.Parent.Economy)
 local Gifts = require(script.Parent.Gifts)
@@ -53,6 +54,9 @@ newRemote("GiftOffer") -- servidor -> cliente: alguien te quiere regalar un mine
 newRemote("GiftClose") -- servidor -> cliente: la oferta terminó
 newRemote("GiftRequest") -- cliente -> servidor: regalar un mineral de la mochila
 newRemote("GiftAnswer") -- cliente -> servidor: aceptar o rechazar
+
+-- Modelos 3D de Blender: se cargan antes de construir (si fallan, se usan los de código).
+ArtLibrary.Preload()
 
 local world = WorldBuilder.Build()
 Bases.Init(world.Bases, {

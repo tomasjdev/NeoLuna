@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local ArtLibrary = require(script.Parent.ArtLibrary)
 
 local Bases = {}
 
@@ -73,8 +74,24 @@ local function refresh(base, floorStands, stands)
 
 		local mineralId = stands[stand.Index]
 		local mineral = unlocked and mineralId ~= "" and Config.MineralsById[mineralId]
-		if mineral then
-			stand.Crystal.Color = Config.GetRarityColor(mineralId)
+		local wanted = if mineral then mineralId else nil
+		-- El mineral con su diseño propio sobre el estante (se rehace solo si cambia).
+		if stand.ShownId ~= wanted then
+			stand.ShownId = wanted
+			if stand.Model then
+				stand.Model:Destroy()
+				stand.Model = nil
+			end
+			if wanted and ArtLibrary.HasMineral(wanted) then
+				local origin = CFrame.new(stand.Crystal.Position - Vector3.new(0, 1.8, 0)) * CFrame.Angles(0, math.rad(stand.Index * 37 % 360), 0)
+				stand.Model = ArtLibrary.BuildMineral(wanted, origin, 0.55, Config.GetMineralColor(wanted))
+				if stand.Model then
+					stand.Model.Parent = stand.Crystal.Parent
+				end
+			end
+		end
+		if mineral and not stand.Model then
+			stand.Crystal.Color = Config.GetMineralColor(mineralId)
 			stand.Crystal.Transparency = 0.1
 		else
 			stand.Crystal.Transparency = 1

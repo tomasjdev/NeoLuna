@@ -10,6 +10,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local HUD = require(script.Parent.HUD)
 local AdminPanel = require(script.Parent.AdminPanel)
 local Effects = require(script.Parent.Effects)
+local ArtAssets = require(ReplicatedStorage.Shared.ArtAssets)
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -97,8 +98,51 @@ local function showNode(node, st)
 	st.Rarity = Config.RaritiesById[st.Mineral.Rarity]
 	st.Hidden = false
 
+	local color = Config.GetMineralColor(st.Mineral.Id)
 	for _, entry in st.Parts do
 		entry.Part.Transparency = entry.Original
+	end
+
+	-- Cristal con modelo 3D: sobre la roca se coloca el diseño del mineral que te toca a TI.
+	if st.Model then
+		st.Model:Destroy()
+		st.Model = nil
+	end
+	local rockPart = node:FindFirstChild("Rock")
+	if node:GetAttribute("ArtMinerals") and rockPart then
+		local templates = ReplicatedStorage:FindFirstChild("ArtTemplates")
+		local template = templates and templates:FindFirstChild(st.Mineral.Id)
+		local info = ArtAssets.minerals and ArtAssets.minerals[st.Mineral.Id]
+		local piece
+		if template and info then
+			piece = template:Clone()
+			piece.Size = info.Size
+			piece.CFrame = rockPart.CFrame * CFrame.new(0, 1.5, 0) * CFrame.new(info.Center)
+			piece.Material = Enum.Material[info.Material]
+			piece.Transparency = if info.Material == "Glass" then 0.1 else 0
+		else
+			piece = Instance.new("Part") -- sin modelo: un cristal simple
+			piece.Size = Vector3.new(2.2, 5, 2.2)
+			piece.CFrame = rockPart.CFrame * CFrame.new(0, 3.8, 0)
+			piece.Material = Enum.Material.Glass
+			piece.Transparency = 0.1
+		end
+		piece.Name = "MineralModel"
+		piece.Anchored = true
+		piece.CanCollide = false
+		piece.CanQuery = false
+		piece.CanTouch = false
+		piece.CastShadow = false
+		piece.Color = color
+		piece.Parent = node
+		st.Model = piece
+		if st.Rarity.Index >= 3 then
+			local glow = Instance.new("PointLight")
+			glow.Color = color
+			glow.Range = 10 + st.Rarity.Index * 2
+			glow.Brightness = 1.2
+			glow.Parent = piece
+		end
 	end
 	local crystal = node:FindFirstChild("Crystal")
 	local small = node:FindFirstChild("CrystalSmall")
@@ -131,6 +175,10 @@ local function hideNode(node, st)
 	for _, entry in st.Parts do
 		entry.Part.Transparency = 1
 	end
+	if st.Model then
+		st.Model:Destroy()
+		st.Model = nil
+	end
 	local crystal = node:FindFirstChild("Crystal")
 	local light = crystal and crystal:FindFirstChildOfClass("PointLight")
 	if light then
@@ -149,8 +197,12 @@ local statesById = {} -- NodeId -> estado del cristal que está cargado ahora
 
 local function attachNode(node)
 	local rock = node:WaitForChild("Rock", 10)
-	node:WaitForChild("Crystal", 10)
-	node:WaitForChild("CrystalSmall", 10)
+	-- Los cristales hechos con código tienen piezas de cristal; los de modelo 3D solo la roca
+	-- (el mineral se coloca desde aquí), así que no hay que esperar a nada más.
+	if not node:GetAttribute("ArtMinerals") then
+		node:WaitForChild("Crystal", 10)
+		node:WaitForChild("CrystalSmall", 10)
+	end
 	local zone = node:GetAttribute("Zone")
 	local seed = node:GetAttribute("Seed")
 	if not (rock and zone and seed) then
@@ -252,6 +304,12 @@ local function showNotice(text)
 	local welcomeAmount = string.find(text, "Bienvenido de vuelta", 1, true) and string.match(text, "juntaron (%$[%d,]+)")
 	if welcomeAmount then
 		pcall(Effects.welcome, welcomeAmount)
+		return
+	end
+	-- Los avisos de texto van a la columna de avisos (no se encima con nada); si por algo la
+	-- pantalla de efectos no existe, se usa el aviso de siempre.
+	local okNotice, shown = pcall(Effects.notice, text)
+	if okNotice and shown then
 		return
 	end
 	noticeId += 1
@@ -588,6 +646,16 @@ end)
 if not fxOk then
 	warn("[Effects] No se pudieron crear los efectos:", fxError)
 end
+
+-- Naves y objetos que ambientan el cielo (opcional: si fallan, no pasa nada).
+task.spawn(function()
+	local ok, err = pcall(function()
+		require(script.Parent.Ambient).start()
+	end)
+	if not ok then
+		warn("[Ambient] No se pudo crear el ambiente del cielo:", err)
+	end
+end)
 
 -- El panel va al final: si fallara, no impide jugar.
 local adminOk, adminError = pcall(function()

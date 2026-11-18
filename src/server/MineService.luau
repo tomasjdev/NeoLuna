@@ -11,6 +11,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Economy = require(script.Parent.Economy)
 local HeldMineral = require(script.Parent.HeldMineral)
 local Props = require(script.Parent.Props)
+local ArtLibrary = require(script.Parent.ArtLibrary)
 local WorldBuilder = require(script.Parent.WorldBuilder)
 
 local MineService = {}
@@ -89,9 +90,23 @@ local function spawnNode(zone)
 		return p
 	end
 
-	local rock = piece("Rock", Enum.PartType.Ball, Vector3.one * 5, Vector3.new(0, 1.2, 0), nil, Color3.fromRGB(120, 118, 125), Enum.Material.Slate)
-	piece("Crystal", Enum.PartType.Block, Vector3.new(2.2, 5, 2.2), Vector3.new(0, 4, 0), CFrame.Angles(0, math.rad(45), math.rad(8)), NEUTRAL_CRYSTAL, Enum.Material.Glass, 0.1)
-	piece("CrystalSmall", Enum.PartType.Block, Vector3.new(1.4, 3, 1.4), Vector3.new(1.8, 3, 0.5), CFrame.Angles(0, math.rad(20), math.rad(-18)), NEUTRAL_CRYSTAL, Enum.Material.Glass, 0.1)
+	-- Con el modelo 3D de Blender si cargó: solo la roca; el mineral de cada jugador lo coloca su
+	-- propia pantalla encima (cada mineral tiene su diseño). Si no, con piezas de código.
+	local rock
+	local artModel = ArtLibrary.IsReady("crystal_node")
+		and ArtLibrary.IsReady("minerals")
+		and ArtLibrary.Build("crystal_node", CFrame.new(ground) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
+	if artModel then
+		rock = artModel:FindFirstChild("rock")
+		rock.Name = "Rock"
+		rock.Parent = model
+		artModel:Destroy()
+		model:SetAttribute("ArtMinerals", true)
+	else
+		rock = piece("Rock", Enum.PartType.Ball, Vector3.one * 5, Vector3.new(0, 1.2, 0), nil, Color3.fromRGB(120, 118, 125), Enum.Material.Slate)
+		piece("Crystal", Enum.PartType.Block, Vector3.new(2.2, 5, 2.2), Vector3.new(0, 4, 0), CFrame.Angles(0, math.rad(45), math.rad(8)), NEUTRAL_CRYSTAL, Enum.Material.Glass, 0.1)
+		piece("CrystalSmall", Enum.PartType.Block, Vector3.new(1.4, 3, 1.4), Vector3.new(1.8, 3, 0.5), CFrame.Angles(0, math.rad(20), math.rad(-18)), NEUTRAL_CRYSTAL, Enum.Material.Glass, 0.1)
+	end
 
 	model.PrimaryPart = rock
 	-- Con streaming, el cristal llega completo (no pieza por pieza) y el cliente lo pinta bien.
@@ -213,7 +228,7 @@ local function startCarry(player, mineral, zone)
 	local color = Config.GetMineralColor(mineral.Id)
 	local carry = {
 		Minerals = { mineral },
-		Gem = character and Props.CarriedGem(character, color),
+		Gem = character and Props.CarriedGem(character, mineral.Id, color),
 		Ufos = {},
 		UfosWanted = 0,
 		UfosPending = 0,

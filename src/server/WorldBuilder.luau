@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local BuildingModels = require(ReplicatedStorage.Shared.BuildingModels)
 local Npcs = require(script.Parent.Npcs)
+local ArtLibrary = require(script.Parent.ArtLibrary)
 
 local WorldBuilder = {}
 
@@ -449,20 +450,6 @@ end
 -- Base, módulos y tienda
 ----------------------------------------------------------------------
 
--- Rover lunar: chasis blanco, ruedas, panel solar y antena parabólica.
-local function buildRover(parent, position)
-	part({ Name = "RoverBody", Size = Vector3.new(8, 1.6, 4.4), Position = position + Vector3.new(0, 2.4, 0), Color = WHITE, Material = Enum.Material.Metal, CanCollide = true }, parent)
-	part({ Name = "RoverCab", Size = Vector3.new(3.4, 1.6, 3.4), Position = position + Vector3.new(1, 3.8, 0), Color = c(60, 80, 110), Material = Enum.Material.Glass }, parent)
-	part({ Name = "RoverPanel", Size = Vector3.new(5, 0.2, 3.6), Position = position + Vector3.new(-1.6, 4.1, 0), Color = c(30, 45, 95) }, parent)
-	part({ Name = "RoverMast", Size = Vector3.new(0.3, 3, 0.3), Position = position + Vector3.new(2.6, 4.6, 1.4), Color = STEEL }, parent)
-	part({ Name = "RoverDish", Shape = Enum.PartType.Ball, Size = Vector3.one * 1.8, Position = position + Vector3.new(2.6, 6.2, 1.4), Color = WHITE }, parent)
-	for _, x in { -2.8, 2.8 } do
-		for _, z in { -2.5, 2.5 } do
-			part({ Name = "RoverWheel", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1, 2.4, 2.4), CFrame = CFrame.new(position + Vector3.new(x, 1.2, z)) * CFrame.Angles(0, math.rad(90), 0), Color = c(55, 55, 60) }, parent)
-		end
-	end
-end
-
 -- Luz en el piso: un disco plano que brilla y alumbra desde abajo, sin postes que tapen la vista.
 local function floorLight(parent, x, z, range)
 	local disc = part({ Name = "FloorLight", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 3.4, 3.4), CFrame = CFrame.new(x, 0.55, z) * VERTICAL, Color = c(255, 240, 200), Material = Enum.Material.Neon }, parent)
@@ -741,8 +728,8 @@ local function buildBases(world)
 	return list
 end
 
--- Plaza común: un disco de concreto con farolas, vacío en el centro, y el módulo de
--- rover como decoración.
+-- Plaza común: un disco de concreto con luces en el piso, el horno de fusión y el altar de
+-- renacimiento.
 local function buildPlaza(world)
 	local plaza = Instance.new("Folder")
 	plaza.Name = "Plaza"
@@ -760,7 +747,6 @@ local function buildPlaza(world)
 		floorLight(plaza, PLAZA_CENTER.X + math.cos(angle) * 28, PLAZA_CENTER.Z + math.sin(angle) * 28, 26)
 	end
 
-	buildRover(plaza, Vector3.new(PLAZA_CENTER.X - 5, 0.5, PLAZA_CENTER.Z + 62))
 
 	-- Horno de fusion: uno solo para todos los jugadores del servidor, en el centro de la
 	-- plaza. Cada uno funde SUS minerales (nadie puede quitarle minerales a otro).
@@ -949,7 +935,7 @@ end
 -- mira el frente.
 local function buildShop(parent, position, facing, def)
 	local origin = CFrame.lookAt(position, position + facing)
-	local shop = BuildingModels.Shop(origin, def.Text, def.Accent)
+	local shop = ArtLibrary.IsReady("shop") and ArtLibrary.BuildShop(origin, def.Text, def.Accent) or BuildingModels.Shop(origin, def.Text, def.Accent)
 	shop.Parent = parent
 
 	local emblem = BuildingModels.Emblem(def.Id, origin * CFrame.new(0, 18, 0))

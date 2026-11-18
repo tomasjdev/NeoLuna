@@ -1104,9 +1104,10 @@ function HUD.mount(parent, ui, handlers)
 	-- Oferta que te hacen: aceptar o rechazar.
 	local giftOfferPanel = scope:New "Frame" {
 		Name = "GiftOffer",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 130),
-		Size = UDim2.fromOffset(420, 0),
+		-- A la derecha, bajo el dinero: así no se encima con la columna de avisos del centro.
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -20, 0, 190),
+		Size = UDim2.fromOffset(340, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
