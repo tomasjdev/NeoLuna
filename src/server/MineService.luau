@@ -19,6 +19,7 @@ local MINE_REACH = 18 -- distancia máxima al nodo para empezar y mantener el pi
 local CANCEL_GRACE = 0.4 -- una cancelación tan cerca del final se ignora (el picado ya casi terminó)
 local SWING_INTERVAL = 0.55 -- segundos entre golpes del pico
 local NODES_PER_ZONE = 16
+local nextNodeId = 0 -- cada cristal tiene un número fijo para que el cliente no se confunda
 
 local rng = Random.new()
 local remotes
@@ -95,6 +96,8 @@ local function spawnNode(zone)
 	model.PrimaryPart = rock
 	-- Con streaming, el cristal llega completo (no pieza por pieza) y el cliente lo pinta bien.
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	nextNodeId += 1
+	model:SetAttribute("NodeId", nextNodeId)
 	model:SetAttribute("Zone", zone)
 	model:SetAttribute("Seed", rng:NextInteger(1, 1000000))
 	model.Parent = nodeFolder
@@ -115,12 +118,39 @@ local function markBroken(node, player)
 	local count = (info.Counts[player] or 0) + 1
 	info.Counts[player] = count
 	info.Until[player] = os.clock() + Config.NodeRespawn
-	remotes.NodeBroken:FireClient(player, node, count)
+	remotes.NodeBroken:FireClient(player, node:GetAttribute("NodeId"), count)
 end
 
 ----------------------------------------------------------------------
 -- Mineral cargado y ovni
 ----------------------------------------------------------------------
+
+-- Lo llama Main para recalcular la velocidad (llevar varios minerales o un rayo te frenan).
+MineService.OnCarryChanged = function(_player) end
+
+local capacityHintShown = {} -- player -> ya se le explicó la mejora de Capacidad
+local slowedUntil = {} -- player -> hora (os.clock) hasta la que va frenado por un rayo
+
+function MineService.GetCarryCount(player)
+	local carry = carrying[player]
+	return if carry then #carry.Minerals else 0
+end
+
+function MineService.IsSlowed(player)
+	return (slowedUntil[player] or 0) > os.clock()
+end
+
+local function capacityFor(player)
+	local data = Economy.Get(player)
+	return Config.GetCarryCapacity(data and data.Capacity or 0)
+end
+
+local function destroyUfos(carry)
+	for _, ufo in carry.Ufos do
+		ufo:Destroy()
+	end
+	table.clear(carry.Ufos)
+end
 
 local function clearCarry(player)
 	local carry = carrying[player]
@@ -131,76 +161,155 @@ local function clearCarry(player)
 	if carry.Gem then
 		carry.Gem:Destroy()
 	end
-	if carry.Ufo then
-		carry.Ufo:Destroy()
-	end
+	destroyUfos(carry)
 	if player.Parent then
-		remotes.Carry:FireClient(player, "")
+		remotes.Carry:FireClient(player, 0)
+		MineService.OnCarryChanged(player)
 	end
 end
 
-local function startCarry(player, mineral)
+-- Hace aparecer los ovnis que faltan (1 desde el inicio, 2 y 3 en las zonas profundas).
+local function ensureUfos(player, carry, zone)
+	local wanted = Config.GetUfoCount(zone)
+	if wanted <= carry.UfosWanted then
+		return
+	end
+	carry.UfosWanted = wanted
+	for index = #carry.Ufos + carry.UfosPending + 1, wanted do
+		carry.UfosPending += 1
+		task.delay(Config.Ufo.SpawnDelay + (index - 1) * 1.2, function()
+			carry.UfosPending -= 1
+			if carrying[player] ~= carry then
+				return
+			end
+			local _, hrp = getCharacterParts(player)
+			if not hrp then
+				return
+			end
+			local side = if index == 1 then 0 else (if index % 2 == 0 then 1 else -1) * 28
+			local ufo = Props.Ufo()
+			ufo:PivotTo(CFrame.new(hrp.Position + Vector3.new(Config.Ufo.SpawnDistance + (index - 1) * 22, Config.Ufo.HoverHeight + 6, side)))
+			ufo.Parent = workspace
+			table.insert(carry.Ufos, ufo)
+			carry.NextShot[ufo] = os.clock() + Config.Ufo.ShotCooldown * 0.6
+			remotes.UfoAlert:FireClient(player, #carry.Ufos, wanted)
+		end)
+	end
+end
+
+-- Recoge un mineral. El primero crea el ovni; los siguientes se suman al mismo viaje.
+local function startCarry(player, mineral, zone)
+	local existing = carrying[player]
+	if existing then
+		table.insert(existing.Minerals, mineral)
+		remotes.Carry:FireClient(player, #existing.Minerals)
+		MineService.OnCarryChanged(player)
+		notice(player, ("Llevas %d minerales. ¡Cuidado con el ovni!"):format(#existing.Minerals))
+		ensureUfos(player, existing, zone) -- más profundo = más ovnis
+		return
+	end
+
 	local character = player.Character
-	local color = Config.GetRarityColor(mineral.Id)
+	local color = Config.GetMineralColor(mineral.Id)
 	local carry = {
-		Mineral = mineral,
+		Minerals = { mineral },
 		Gem = character and Props.CarriedGem(character, color),
-		Ufo = nil,
+		Ufos = {},
+		UfosWanted = 0,
+		UfosPending = 0,
+		NextShot = {}, -- ovni -> hora del próximo disparo
 	}
 	carrying[player] = carry
-	remotes.Carry:FireClient(player, mineral.Id)
-
-	task.delay(Config.Ufo.SpawnDelay, function()
-		if carrying[player] ~= carry then
-			return
-		end
-		local _, hrp = getCharacterParts(player)
-		if not hrp then
-			return
-		end
-		local ufo = Props.Ufo()
-		ufo:PivotTo(CFrame.new(hrp.Position + Vector3.new(Config.Ufo.SpawnDistance, Config.Ufo.HoverHeight + 6, 0)))
-		ufo.Parent = workspace
-		carry.Ufo = ufo
-		notice(player, "¡Un ovni te persigue!")
-	end)
+	remotes.Carry:FireClient(player, 1)
+	MineService.OnCarryChanged(player)
+	ensureUfos(player, carry, zone)
+	-- Una vez por sesión: cómo llevar más minerales por viaje.
+	if capacityFor(player) <= 1 and not capacityHintShown[player] then
+		capacityHintShown[player] = true
+		notice(player, "Solo puedes llevar 1 mineral por viaje. Mejora Capacidad en la tienda morada.")
+	end
 end
 
 local function deliver(player, carry)
-	local mineral = carry.Mineral
-	local saved = Economy.AddMineral(player, mineral.Id)
+	local savedCount, lost = 0, 0
+	local lastName = ""
+	for _, mineral in carry.Minerals do
+		if Economy.AddMineral(player, mineral.Id) then
+			savedCount += 1
+			lastName = mineral.Name
+		else
+			lost += 1
+		end
+	end
 	clearCarry(player)
-	if saved then
-		notice(player, ("¡Guardaste %s en tu mochila!"):format(mineral.Name))
+	if savedCount == 1 and lost == 0 then
+		notice(player, ("¡Guardaste %s en tu mochila!"):format(lastName))
+	elseif savedCount > 0 then
+		local text = ("¡Guardaste %d minerales en tu mochila!"):format(savedCount)
+		if lost > 0 then
+			text ..= (" (mochila llena: se perdieron %d)"):format(lost)
+		end
+		notice(player, text)
 	else
 		notice(player, "¡Tu mochila estaba llena y se perdió el mineral!")
 	end
 end
 
-local function caught(player, carry, hrp)
-	local ufo = carry.Ufo
-	carry.Ufo = nil -- que clearCarry no lo destruya: se va volando
-	if Economy.UseShield(player) then
-		-- El escudo anti-Alien: el mineral se salva y se guarda en la mochila.
-		deliver(player, carry)
-		notice(player, "¡Tu escudo te salvó del ovni!")
-		if ufo then
-			task.spawn(function()
-				flyModel(ufo, ufo:GetPivot() + Vector3.new(0, 80, 0), 1.5)
-				ufo:Destroy()
-			end)
-		end
-		return
-	end
-	clearCarry(player)
-	hrp.CFrame = CFrame.new(WorldBuilder.ReturnPosition)
-	notice(player, "¡El ovni se llevó tu mineral! Entra a la mina otra vez.")
-	if ufo then
+-- Los ovnis se van volando (cuando atrapan al jugador o lo salva el escudo).
+local function sendUfosAway(ufos)
+	for _, ufo in ufos do
 		task.spawn(function()
 			flyModel(ufo, ufo:GetPivot() + Vector3.new(0, 80, 0), 1.5)
 			ufo:Destroy()
 		end)
 	end
+end
+
+local function caught(player, carry, hrp)
+	local ufos = table.clone(carry.Ufos)
+	table.clear(carry.Ufos) -- que clearCarry no los destruya: se van volando
+	if Economy.UseShield(player) then
+		-- El escudo anti-Alien: los minerales se salvan y se guardan en la mochila.
+		deliver(player, carry)
+		notice(player, "¡Tu escudo te salvó del ovni!")
+		sendUfosAway(ufos)
+		return
+	end
+	clearCarry(player)
+	hrp.CFrame = CFrame.new(WorldBuilder.ReturnPosition)
+	notice(player, "¡El ovni se llevó tus minerales! Entra a la mina otra vez.")
+	sendUfosAway(ufos)
+end
+
+-- Un ovni dispara un rayo al jugador: si le da, lo frena un momento.
+local function shoot(player, ufo, hrp)
+	local target = hrp.Position + hrp.AssemblyLinearVelocity * 0.5
+	local bolt = Instance.new("Part")
+	bolt.Name = "UfoBolt"
+	bolt.Shape = Enum.PartType.Ball
+	bolt.Size = Vector3.one * 2.2
+	bolt.Material = Enum.Material.Neon
+	bolt.Color = Color3.fromRGB(255, 70, 70)
+	bolt.Anchored = true
+	bolt.CanCollide = false
+	bolt.CanQuery = false
+	bolt.CanTouch = false
+	bolt.Position = ufo:GetPivot().Position - Vector3.new(0, 2, 0)
+	bolt.Parent = workspace
+	local tween = TweenService:Create(bolt, TweenInfo.new(0.6, Enum.EasingStyle.Linear), { Position = target })
+	tween.Completed:Connect(function()
+		bolt:Destroy()
+		local _, current = getCharacterParts(player)
+		if current and (current.Position - target).Magnitude < 7 then
+			slowedUntil[player] = os.clock() + Config.Ufo.SlowSeconds
+			MineService.OnCarryChanged(player)
+			task.delay(Config.Ufo.SlowSeconds + 0.05, function()
+				MineService.OnCarryChanged(player)
+			end)
+			notice(player, "¡Un rayo del ovni te frenó!")
+		end
+	end)
+	tween:Play()
 end
 
 ----------------------------------------------------------------------
@@ -274,7 +383,9 @@ function MineService.StartMining(player, node)
 	if typeof(node) ~= "Instance" or not nodes[node] or not node.PrimaryPart then
 		return
 	end
-	if carrying[player] then
+	-- Se pueden llevar varios minerales por viaje (mejora de capacidad).
+	if MineService.GetCarryCount(player) >= capacityFor(player) then
+		notice(player, "Ya no puedes llevar más minerales. ¡Vuelve a la entrada!")
 		return
 	end
 	-- Una sesión vieja del mismo jugador (p. ej. se soltó la tecla sin aviso) se reemplaza.
@@ -290,7 +401,7 @@ function MineService.StartMining(player, node)
 	if not (data and hrp and humanoid) then
 		return
 	end
-	if Economy.FreeSlots(player) <= 0 then
+	if Economy.FreeSlots(player) <= MineService.GetCarryCount(player) then
 		notice(player, "¡Mochila llena! Vende algo primero.")
 		return
 	end
@@ -329,8 +440,8 @@ local function finishMining(player, session)
 	local node, mineral = session.Node, session.Mineral
 	stopMining(player)
 	markBroken(node, player)
-	if player.Parent and Economy.Get(player) and not carrying[player] then
-		startCarry(player, mineral)
+	if player.Parent and Economy.Get(player) then
+		startCarry(player, mineral, node:GetAttribute("Zone"))
 	end
 end
 
@@ -363,8 +474,8 @@ local function step(dt)
 			continue
 		end
 
-		local ufo = carry.Ufo
-		if ufo then
+		local zone = Config.GetZone(position.X)
+		for _, ufo in carry.Ufos do
 			local current = ufo:GetPivot().Position
 			local goal = Vector3.new(position.X, position.Y + Config.Ufo.HoverHeight, position.Z)
 			local offset = goal - current
@@ -375,6 +486,13 @@ local function step(dt)
 			local flat = Vector3.new(nextPosition.X - position.X, 0, nextPosition.Z - position.Z).Magnitude
 			if flat < Config.Ufo.CatchDistance then
 				caught(player, carry, hrp)
+				break
+			end
+
+			-- Desde las zonas profundas, los ovnis disparan.
+			if zone >= Config.Ufo.ShootFromZone and flat < Config.Ufo.ShotRange and os.clock() >= (carry.NextShot[ufo] or 0) then
+				carry.NextShot[ufo] = os.clock() + Config.Ufo.ShotCooldown
+				shoot(player, ufo, hrp)
 			end
 		end
 	end

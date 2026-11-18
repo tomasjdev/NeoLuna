@@ -17,13 +17,14 @@ local BORDER = Color3.fromRGB(190, 165, 255)
 local GOLD = Color3.fromRGB(255, 200, 60)
 local HELD_COLOR = Color3.fromRGB(255, 120, 0) -- contorno del mineral que llevas en la mano
 local EMPTY_SLOT = Color3.fromRGB(236, 230, 248)
-local DISABLED = Color3.fromRGB(190, 184, 208)
+local DISABLED = Color3.fromRGB(140, 132, 172) -- botones apagados: se lee el texto blanco
 local FONT = Enum.Font.FredokaOne
 
 local ROW_COLORS = {
 	Speed = Color3.fromRGB(255, 150, 70),
 	Strength = Color3.fromRGB(45, 190, 180),
 	Pickaxe = Color3.fromRGB(150, 110, 255),
+	Capacity = Color3.fromRGB(215, 95, 205),
 }
 
 -- Qué rareza desbloquea el pico en cierto nivel (o nil).
@@ -89,7 +90,7 @@ function HUD.mount(parent, ui, handlers)
 			Size = UDim2.fromOffset(64, 64),
 			BackgroundColor3 = scope:Computed(function(use)
 				local m = use(mineral)
-				return if m then Config.RaritiesById[m.Rarity].Color else EMPTY_SLOT
+				return if m then Config.GetMineralColor(m.Id) else EMPTY_SLOT
 			end),
 			BorderSizePixel = 0,
 			AutoButtonColor = false,
@@ -105,6 +106,21 @@ function HUD.mount(parent, ui, handlers)
 
 			[Children] = {
 				rounded(14),
+				-- Número del espacio (arriba a la derecha): la tecla con la que se elige.
+				scope:New "TextLabel" {
+					Name = "Number",
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(1, -2, 0, 2),
+					Size = UDim2.fromOffset(18, 16),
+					BackgroundTransparency = 1,
+					Font = FONT,
+					TextSize = 14,
+					TextColor3 = WHITE,
+					TextStrokeTransparency = 0.3,
+					TextStrokeColor3 = Color3.fromRGB(40, 30, 80),
+					ZIndex = 3,
+					Text = tostring(index),
+				},
 				scope:New "UIScale" { Scale = scale },
 				scope:New "UIStroke" {
 					Color = scope:Computed(function(use)
@@ -130,7 +146,15 @@ function HUD.mount(parent, ui, handlers)
 					Font = FONT,
 					TextSize = 12,
 					TextWrapped = true,
-					TextColor3 = TEXT,
+					-- Texto oscuro sobre colores claros y blanco sobre colores oscuros.
+					TextColor3 = scope:Computed(function(use)
+						local m = use(mineral)
+						if not m then
+							return TEXT
+						end
+						local c = Config.GetMineralColor(m.Id)
+						return if (c.R * 0.299 + c.G * 0.587 + c.B * 0.114) < 0.55 then WHITE else TEXT
+					end),
 					Text = scope:Computed(function(use)
 						local m = use(mineral)
 						return if m then m.Name else ""
@@ -195,31 +219,81 @@ function HUD.mount(parent, ui, handlers)
 	-- Estado (arriba al centro): solo la zona
 	----------------------------------------------------------------------
 
-	local statusPanel = scope:New "TextLabel" {
+	-- Letrero de la zona: una cápsula con el número en el color de la zona, "MINA LUNAR" pequeño
+	-- y el nombre grande. Solo dentro de la mina. En celular se agranda.
+	local zoneIndex = scope:Computed(function(use)
+		return Config.GetZone(use(ui.depth))
+	end)
+	local touchScale = if game:GetService("UserInputService").TouchEnabled then 1.3 else 1
+
+	local statusPanel = scope:New "Frame" {
 		Name = "Status",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 20),
-		Size = UDim2.fromOffset(300, 44),
+		Position = UDim2.new(0.5, 0, 0, 16),
+		Size = UDim2.fromOffset(400, 66),
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
-		Font = FONT,
-		TextSize = 20,
-		TextColor3 = TEXT,
-		-- Solo se muestra dentro de la mina; en la base no aparece.
 		Visible = scope:Computed(function(use)
 			return use(ui.depth) > 0
 		end),
-		Text = scope:Computed(function(use)
-			local depth = use(ui.depth)
-			if depth <= 0 then
-				return ""
-			end
-			return "Mina lunar - " .. Config.Zones[Config.GetZone(depth)].Name
-		end),
 
 		[Children] = {
-			rounded(16),
-			scope:New "UIStroke" { Color = BORDER, Thickness = 3 },
+			rounded(33),
+			scope:New "UIScale" { Scale = touchScale },
+			scope:New "UIStroke" {
+				Color = scope:Computed(function(use)
+					return Config.Zones[use(zoneIndex)].GemColor
+				end),
+				Thickness = 4,
+			},
+			-- Número de la zona
+			scope:New "Frame" {
+				Position = UDim2.fromOffset(9, 9),
+				Size = UDim2.fromOffset(48, 48),
+				BackgroundColor3 = scope:Computed(function(use)
+					return Config.Zones[use(zoneIndex)].GemColor
+				end),
+				BorderSizePixel = 0,
+				[Children] = {
+					scope:New "UICorner" { CornerRadius = UDim.new(1, 0) },
+					scope:New "TextLabel" {
+						Size = UDim2.fromScale(1, 1),
+						BackgroundTransparency = 1,
+						Font = FONT,
+						TextSize = 26,
+						TextColor3 = WHITE,
+						TextStrokeColor3 = Color3.fromRGB(60, 40, 110),
+						TextStrokeTransparency = 0.3,
+						Text = scope:Computed(function(use)
+							return tostring(use(zoneIndex))
+						end),
+					},
+				},
+			},
+			scope:New "TextLabel" {
+				Position = UDim2.fromOffset(70, 8),
+				Size = UDim2.new(1, -84, 0, 16),
+				BackgroundTransparency = 1,
+				Font = Enum.Font.GothamBold,
+				TextSize = 13,
+				TextColor3 = DIM,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Text = "MINA LUNAR",
+			},
+			scope:New "TextLabel" {
+				Position = UDim2.fromOffset(70, 22),
+				Size = UDim2.new(1, -84, 0, 36),
+				BackgroundTransparency = 1,
+				Font = FONT,
+				TextSize = 30,
+				TextScaled = true,
+				TextColor3 = TEXT,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Text = scope:Computed(function(use)
+					return Config.Zones[use(zoneIndex)].Name
+				end),
+				[Children] = scope:New "UITextSizeConstraint" { MaxTextSize = 30 },
+			},
 		},
 	}
 
@@ -234,12 +308,14 @@ function HUD.mount(parent, ui, handlers)
 		Name = "Notice",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 74),
-		Size = UDim2.fromOffset(460, 40),
+		Size = UDim2.fromOffset(500, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = WHITE,
 		BackgroundTransparency = noticeFade,
 		BorderSizePixel = 0,
 		Font = FONT,
 		TextSize = 18,
+		TextWrapped = true,
 		TextColor3 = TEXT,
 		TextTransparency = noticeFade,
 		Text = ui.notice,
@@ -247,6 +323,12 @@ function HUD.mount(parent, ui, handlers)
 		[Children] = {
 			rounded(14),
 			scope:New "UIStroke" { Color = BORDER, Thickness = 3, Transparency = noticeFade },
+			scope:New "UIPadding" {
+				PaddingTop = UDim.new(0, 9),
+				PaddingBottom = UDim.new(0, 9),
+				PaddingLeft = UDim.new(0, 14),
+				PaddingRight = UDim.new(0, 14),
+			},
 		},
 	}
 
@@ -482,6 +564,8 @@ function HUD.mount(parent, ui, handlers)
 				return "¡Nivel máximo!"
 			elseif kind == "Speed" then
 				return ("Correr: %.1f → %.1f"):format(Config.GetWalkSpeed(l), Config.GetWalkSpeed(l + 1))
+			elseif kind == "Capacity" then
+				return ("Minerales por viaje: %d → %d"):format(Config.GetCarryCapacity(l), Config.GetCarryCapacity(l + 1))
 			elseif kind == "Strength" then
 				return ("Tiempo de picado: %d%% → %d%%"):format(
 					math.floor(Config.GetStrengthFactor(l) * 100 + 0.5),
@@ -494,7 +578,7 @@ function HUD.mount(parent, ui, handlers)
 
 		local fill = scope:Tween(
 			scope:Computed(function(use)
-				return if use(affordable) then ROW_COLORS[kind] else DISABLED
+				return if use(affordable) then ROW_COLORS[kind] else ROW_COLORS[kind]:Lerp(Color3.fromRGB(75, 65, 110), 0.62)
 			end),
 			TweenInfo.new(0.2)
 		)
@@ -528,8 +612,10 @@ function HUD.mount(parent, ui, handlers)
 					Size = UDim2.new(0.62, 0, 0, 22),
 					BackgroundTransparency = 1,
 					Font = FONT,
-					TextSize = 17,
+					TextSize = 18,
 					TextColor3 = WHITE,
+					TextStrokeColor3 = Color3.fromRGB(40, 25, 80),
+					TextStrokeTransparency = 0.5,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					Text = scope:Computed(function(use)
 						return ("%s  Nv %d"):format(upgrade.Label, use(level))
@@ -540,8 +626,10 @@ function HUD.mount(parent, ui, handlers)
 					Size = UDim2.new(0.7, 0, 0, 18),
 					BackgroundTransparency = 1,
 					Font = Enum.Font.GothamMedium,
-					TextSize = 12,
+					TextSize = 13,
 					TextColor3 = WHITE,
+					TextStrokeColor3 = Color3.fromRGB(40, 25, 80),
+					TextStrokeTransparency = 0.6,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					Text = detail,
 				},
@@ -554,6 +642,8 @@ function HUD.mount(parent, ui, handlers)
 					TextSize = 19,
 					TextScaled = true,
 					TextColor3 = WHITE,
+					TextStrokeColor3 = Color3.fromRGB(40, 25, 80),
+					TextStrokeTransparency = 0.45,
 					TextXAlignment = Enum.TextXAlignment.Right,
 					[Children] = scope:New "UITextSizeConstraint" { MaxTextSize = 19 },
 					Text = scope:Computed(function(use)
@@ -582,7 +672,12 @@ function HUD.mount(parent, ui, handlers)
 
 		[Children] = {
 			rounded(20),
-			scope:New "UIStroke" { Color = BORDER, Thickness = 4 },
+			scope:New "UIStroke" {
+				Color = scope:Computed(function(use)
+					return ROW_COLORS[use(ui.shopKind)] or BORDER
+				end),
+				Thickness = 5,
+			},
 			scope:New "UIPadding" {
 				PaddingTop = UDim.new(0, 14),
 				PaddingBottom = UDim.new(0, 14),
@@ -595,11 +690,13 @@ function HUD.mount(parent, ui, handlers)
 			},
 			scope:New "TextLabel" {
 				LayoutOrder = 1,
-				Size = UDim2.new(1, 0, 0, 26),
+				Size = UDim2.new(1, 0, 0, 28),
 				BackgroundTransparency = 1,
 				Font = FONT,
-				TextSize = 22,
-				TextColor3 = TEXT,
+				TextSize = 24,
+				TextColor3 = scope:Computed(function(use)
+					return (ROW_COLORS[use(ui.shopKind)] or TEXT):Lerp(Color3.fromRGB(50, 35, 100), 0.35)
+				end),
 				TextXAlignment = Enum.TextXAlignment.Left,
 				Text = scope:Computed(function(use)
 					local upgrade = Config.Upgrades[use(ui.shopKind)]
@@ -623,6 +720,8 @@ function HUD.mount(parent, ui, handlers)
 						return "Pica los minerales en menos tiempo."
 					elseif kind == "Pickaxe" then
 						return "Con un pico mejor, los minerales raros se pican más rápido."
+					elseif kind == "Capacity" then
+						return "Lleva más minerales por viaje. Cada uno extra te frena un poco."
 					end
 					return ""
 				end),
@@ -630,6 +729,7 @@ function HUD.mount(parent, ui, handlers)
 			UpgradeRow("Speed", 3),
 			UpgradeRow("Strength", 4),
 			UpgradeRow("Pickaxe", 5),
+			UpgradeRow("Capacity", 6),
 		},
 	}
 

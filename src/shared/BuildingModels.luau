@@ -99,7 +99,7 @@ local function coinStack(model, origin, offset, count, color)
 end
 
 -- Emblemas que flotan sobre el techo de cada tienda; `origin` es su centro.
--- Kinds: Pickaxe, Strength, Speed, Sell, X2, Boots, Shield, Credits.
+-- Kinds: Pickaxe, Strength, Speed, Capacity, Sell, X2, Boots, Shield, Credits.
 function BuildingModels.Emblem(kind, origin)
 	local model = Instance.new("Model")
 	model.Name = "Emblem" .. kind
@@ -122,6 +122,13 @@ function BuildingModels.Emblem(kind, origin)
 		piece(model, origin, Vector3.new(1.2, 3.3, 0), Vector3.new(2.2, 5, 1.2), yellow, { Rotation = CFrame.Angles(0, 0, math.rad(-22)) })
 		piece(model, origin, Vector3.new(0, 0.4, 0), Vector3.new(4.2, 1.7, 1.2), yellow)
 		piece(model, origin, Vector3.new(-1.2, -3, 0), Vector3.new(2.2, 5, 1.2), yellow, { Rotation = CFrame.Angles(0, 0, math.rad(-22)) })
+	elseif kind == "Capacity" then
+		-- Mochila: cuerpo morado, bolsillo, correas y gemita.
+		local purple = c(150, 110, 230)
+		piece(model, origin, Vector3.new(0, 0, 0), Vector3.new(6, 8, 3.4), purple)
+		piece(model, origin, Vector3.new(0, -1.6, -2), Vector3.new(4.4, 3.4, 1.2), c(120, 85, 200))
+		piece(model, origin, Vector3.new(0, 4.4, 0), Vector3.new(3, 1.2, 2.4), c(120, 85, 200))
+		ball(model, origin, Vector3.new(0, -1.6, -2.8), 1.2, GOLD)
 	elseif kind == "Sell" then
 		coinStack(model, origin, Vector3.new(0, -2.5, 0), 5, GOLD)
 	elseif kind == "X2" then

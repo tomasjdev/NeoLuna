@@ -9,6 +9,7 @@ local Fusion = require(ReplicatedStorage.Shared.Fusion)
 local Config = require(ReplicatedStorage.Shared.Config)
 local HUD = require(script.Parent.HUD)
 local AdminPanel = require(script.Parent.AdminPanel)
+local Effects = require(script.Parent.Effects)
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -35,6 +36,7 @@ local giftCloseRemote = remotes:WaitForChild("GiftClose")
 local giftRequestRemote = remotes:WaitForChild("GiftRequest")
 local giftAnswerRemote = remotes:WaitForChild("GiftAnswer")
 local sellAllRemote = remotes:WaitForChild("SellAll")
+local ufoAlertRemote = remotes:WaitForChild("UfoAlert")
 local buyRobuxRemote = remotes:WaitForChild("BuyRobux")
 
 local SHOP_CLOSE_DISTANCE = 18 -- la tienda se cierra si te alejas más que esto
@@ -46,8 +48,8 @@ end)
 
 local scope = Fusion.scoped(Fusion)
 local ui = {
-	state = scope:Value({ Money = 0, Speed = 0, Strength = 0, Pickaxe = 0, Inventory = {}, Stands = {}, Rebirths = 0, Passes = {}, Shields = 0 }),
-	carry = scope:Value(""), -- id del mineral que llevas ("" = ninguno)
+	state = scope:Value({ Money = 0, Speed = 0, Strength = 0, Pickaxe = 0, Inventory = {}, Stands = {}, Rebirths = 0, Passes = {}, Shields = 0, Capacity = 0 }),
+	carry = scope:Value(0), -- cuántos minerales llevas en este viaje
 	notice = scope:Value(""),
 	shopKind = scope:Value(""), -- tienda de mejoras abierta: "Sell", "Pickaxe", "Strength" o "Speed"
 	robuxKind = scope:Value(""), -- tienda de Robux abierta: "X2", "Boots", "Shield" o "Credits"
@@ -77,7 +79,7 @@ local prompts = {} -- prompt -> estado del cristal
 
 local function refreshPrompts()
 	local state = Fusion.peek(ui.state)
-	local canMine = Fusion.peek(ui.carry) == ""
+	local canMine = Fusion.peek(ui.carry) < Config.GetCarryCapacity(state.Capacity or 0)
 	for prompt, st in prompts do
 		prompt.HoldDuration = Config.GetMineTime(state.Strength, state.Pickaxe, st.Zone, st.Rarity.Id)
 		prompt.Enabled = canMine and not st.Hidden
@@ -101,12 +103,12 @@ local function showNode(node, st)
 	local crystal = node:FindFirstChild("Crystal")
 	local small = node:FindFirstChild("CrystalSmall")
 	if crystal then
-		crystal.Color = st.Rarity.Color
+		crystal.Color = Config.GetMineralColor(st.Mineral.Id)
 		-- Los minerales raros o mejores brillan.
 		local light = crystal:FindFirstChildOfClass("PointLight")
 		if st.Rarity.Index >= 3 then
 			light = light or Instance.new("PointLight")
-			light.Color = st.Rarity.Color
+			light.Color = Config.GetMineralColor(st.Mineral.Id)
 			light.Range = 10 + st.Rarity.Index * 2
 			light.Brightness = 1.2
 			light.Enabled = true
@@ -116,7 +118,7 @@ local function showNode(node, st)
 		end
 	end
 	if small then
-		small.Color = st.Rarity.Color
+		small.Color = Config.GetMineralColor(st.Mineral.Id)
 	end
 
 	st.Prompt.ObjectText = ("%s (%s)"):format(st.Mineral.Name, st.Rarity.Name)
@@ -138,6 +140,12 @@ local function hideNode(node, st)
 end
 
 local nodeStates = {} -- node -> estado
+-- Con streaming un cristal puede salir y volver a aparecer como un objeto nuevo. Lo que el
+-- servidor sabe (cuántas veces lo rompiste y hasta cuándo no ha vuelto) se guarda aquí por el
+-- número fijo del cristal, para que siempre veas el mismo mineral que te va a dar.
+local countsById = {} -- NodeId -> veces que lo rompiste
+local brokenUntilById = {} -- NodeId -> hora (os.clock) en que vuelve a aparecer para ti
+local statesById = {} -- NodeId -> estado del cristal que está cargado ahora
 
 local function attachNode(node)
 	local rock = node:WaitForChild("Rock", 10)
@@ -162,22 +170,41 @@ local function attachNode(node)
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = rock
 
-	local st = { Zone = zone, Seed = seed, Count = 0, Hidden = false, Parts = parts, Prompt = prompt }
+	local id = node:GetAttribute("NodeId")
+	local st = { Node = node, Id = id, Zone = zone, Seed = seed, Count = countsById[id] or 0, Hidden = false, Parts = parts, Prompt = prompt }
 	nodeStates[node] = st
+	if id then
+		statesById[id] = st
+	end
 	prompts[prompt] = st
 
 	prompt.PromptButtonHoldBegan:Connect(function()
 		mineStartRemote:FireServer(node)
+		Effects.mineLoop(true)
 	end)
 	prompt.PromptButtonHoldEnded:Connect(function()
 		mineCancelRemote:FireServer()
+		Effects.mineLoop(false)
 	end)
 	prompt.Destroying:Connect(function()
 		prompts[prompt] = nil
 		nodeStates[node] = nil
+		if id and statesById[id] == st then
+			statesById[id] = nil
+		end
 	end)
 
 	showNode(node, st)
+	-- Si lo rompiste hace poco y todavía no vuelve, sigue oculto hasta que le toque.
+	local remaining = id and brokenUntilById[id] and brokenUntilById[id] - os.clock() or 0
+	if remaining > 0 then
+		hideNode(node, st)
+		task.delay(remaining, function()
+			if statesById[id] == st and (brokenUntilById[id] or 0) <= os.clock() + 0.05 then
+				showNode(node, st)
+			end
+		end)
+	end
 end
 
 local nodeFolder = workspace:WaitForChild("MineNodes")
@@ -188,16 +215,19 @@ nodeFolder.ChildAdded:Connect(function(node)
 	task.spawn(attachNode, node)
 end)
 
-nodeBrokenRemote.OnClientEvent:Connect(function(node, count)
-	local st = nodeStates[node]
-	if not st then
-		return
+nodeBrokenRemote.OnClientEvent:Connect(function(id, count)
+	Effects.mineLoop(false)
+	countsById[id] = count
+	brokenUntilById[id] = os.clock() + Config.NodeRespawn
+	local st = statesById[id]
+	if st then
+		st.Count = count
+		hideNode(st.Node, st)
 	end
-	st.Count = count
-	hideNode(node, st)
 	task.delay(Config.NodeRespawn, function()
-		if nodeStates[node] == st then
-			showNode(node, st)
+		local current = statesById[id]
+		if current and (brokenUntilById[id] or 0) <= os.clock() + 0.05 then
+			showNode(current.Node, current)
 		end
 	end)
 end)
@@ -214,6 +244,16 @@ local standPrompts = {} -- índice de estante -> { Prompt, Position }
 
 local noticeId = 0
 local function showNotice(text)
+	-- "+$1,200" al cobrar: número flotante verde (sin caja). La bienvenida: tarjeta propia.
+	if string.sub(text, 1, 2) == "+$" then
+		pcall(Effects.gain, text)
+		return
+	end
+	local welcomeAmount = string.find(text, "Bienvenido de vuelta", 1, true) and string.match(text, "juntaron (%$[%d,]+)")
+	if welcomeAmount then
+		pcall(Effects.welcome, welcomeAmount)
+		return
+	end
 	noticeId += 1
 	local id = noticeId
 	ui.notice:set(text)
@@ -230,8 +270,17 @@ local function isStandEmpty(index)
 end
 
 local function refreshStandPrompts()
+	local state = Fusion.peek(ui.state)
 	for index, info in standPrompts do
-		info.Prompt.ActionText = if isStandEmpty(index) then "Dejar mineral" else "Retirar mineral"
+		local mineralId = (state.Stands or {})[index] or ""
+		info.Prompt.ActionText = if mineralId == "" then "Dejar mineral" else "Retirar mineral"
+		-- Lo que genera, solo se ve al acercarte a ese estante (entero, por segundo).
+		local extra = ""
+		if mineralId ~= "" then
+			local rate = Config.GetMineralIncome(mineralId) * Config.GetRebirthMultiplier(state.Rebirths) * Config.GetMoneyMultiplier(state)
+			extra = (" · %s por segundo"):format(Config.FormatMoney(rate))
+		end
+		info.Prompt.ObjectText = info.BaseText .. extra
 	end
 end
 
@@ -243,6 +292,7 @@ local function placeHeldMineral(standIndex)
 		return
 	end
 	placeRemote:FireServer(standIndex, slot)
+	Effects.play("Place")
 end
 
 local function attachStandPrompts(baseIndex)
@@ -264,11 +314,12 @@ local function attachStandPrompts(baseIndex)
 			prompt.Triggered:Connect(function()
 				if not isStandEmpty(standIndex) then
 					removeRemote:FireServer(standIndex)
+					Effects.play("Place")
 					return
 				end
 				placeHeldMineral(standIndex)
 			end)
-			standPrompts[standIndex] = { Prompt = prompt, Position = child.Position }
+			standPrompts[standIndex] = { Prompt = prompt, Position = child.Position, BaseText = prompt.ObjectText }
 		end
 	end
 	refreshStandPrompts()
@@ -405,8 +456,13 @@ selectedRemote.OnClientEvent:Connect(function(slot)
 	ui.held:set(slot)
 end)
 
-carryRemote.OnClientEvent:Connect(function(mineralId)
-	ui.carry:set(mineralId)
+ufoAlertRemote.OnClientEvent:Connect(function(count, wanted)
+	pcall(Effects.ufoAlert, count, wanted)
+end)
+
+carryRemote.OnClientEvent:Connect(function(count)
+	pcall(Effects.setChased, count > 0)
+	ui.carry:set(count)
 	refreshPrompts()
 end)
 
@@ -524,6 +580,14 @@ HUD.mount(player:WaitForChild("PlayerGui"), ui, {
 		ui.giftOffer:set(false)
 	end,
 })
+
+-- Efectos de pantalla y sonido: también opcionales.
+local fxOk, fxError = pcall(function()
+	Effects.mount(player:WaitForChild("PlayerGui"))
+end)
+if not fxOk then
+	warn("[Effects] No se pudieron crear los efectos:", fxError)
+end
 
 -- El panel va al final: si fallara, no impide jugar.
 local adminOk, adminError = pcall(function()

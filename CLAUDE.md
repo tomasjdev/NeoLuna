@@ -25,8 +25,9 @@ Diseño completo: `docs/superpowers/specs/2026-11-14-mineria-lunar-design.md`
 
 ## Formato del dinero
 Todo el dinero que se muestra lleva el signo `$` delante y es un número entero con comas
-(`Config.FormatMoney`), sin "cr" ni "créditos". No se muestra cuánto genera nada por segundo;
-solo el total del jugador. (El informe de estantes del panel de admin sí lo muestra, en enteros.)
+(`Config.FormatMoney`), sin "cr" ni "créditos". No se muestra cuánto genera la base por segundo;
+solo el total del jugador. Lo que genera un estante sí se ve, en entero, solo al acercarte a ese
+estante (texto del prompt). El informe de estantes del panel de admin también lo muestra.
 
 ## Panel de administrador
 Botón "ADMIN" (arriba a la izquierda) o la tecla ` abren el panel; solo lo ven los admins.

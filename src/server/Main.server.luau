@@ -33,6 +33,7 @@ local adminStatusRemote = newRemote("AdminStatus") -- le dice al cliente si es a
 newRemote("Selected") -- espacio de la barra que llevas en la mano (0 = ninguno)
 newRemote("Carry")
 newRemote("NodeBroken")
+newRemote("UfoAlert") -- servidor -> cliente: aparecen ovnis (cuántos, cuántos habrá en total)
 local openShopRemote = newRemote("OpenShop")
 -- cliente -> servidor
 local requestRemote = newRemote("RequestState")
@@ -85,8 +86,15 @@ local function applyWalkSpeed(player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if data and humanoid then
-		humanoid.WalkSpeed = Config.GetWalkSpeed(data.Speed, data.Passes.Boots == true)
+		-- Llevar varios minerales frena un poco (5 % por cada mineral extra).
+		local extra = math.max(0, MineService.GetCarryCount(player) - 1)
+		local slow = if MineService.IsSlowed(player) then Config.Ufo.SlowAmount else 0
+		humanoid.WalkSpeed = Config.GetWalkSpeed(data.Speed, data.Passes.Boots == true) * (1 - Config.CarrySlowPerExtra * extra) * (1 - slow)
 	end
+end
+
+MineService.OnCarryChanged = function(player)
+	applyWalkSpeed(player)
 end
 
 Economy.OnChanged = function(player, data)
@@ -244,6 +252,24 @@ local function onPlayerAdded(player)
 	end)
 	if Economy.Load(player) then
 		Robux.CheckPasses(player)
+		-- Lo que juntaron los estantes mientras no estaba (se cobra pisando las placas verdes).
+		task.delay(6, function()
+			local data = Economy.Get(player)
+			if not data then
+				return
+			end
+			local now = os.time()
+			local multiplier = Config.GetRebirthMultiplier(data.Rebirths) * Config.GetMoneyMultiplier(data)
+			local pending = 0
+			for index, mineralId in data.Stands do
+				if mineralId ~= "" then
+					pending += Config.GetStandPending(mineralId, data.StandSince[index], now, multiplier)
+				end
+			end
+			if pending >= 100 then
+				remotes.Notice:FireClient(player, ("¡Bienvenido de vuelta! Tus estantes juntaron %s. ¡Cóbralos en las placas verdes!"):format(Config.FormatMoney(pending)))
+			end
+		end)
 	end
 end
 

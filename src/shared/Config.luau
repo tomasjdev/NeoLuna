@@ -21,6 +21,18 @@ function Config.FormatMoney(amount)
 	return (if amount < 0 then "-$" else "$") .. formatted
 end
 
+-- Ids de sonido (assets de Roblox). 0 = sin sonido. Music y Chase son música en bucle; el resto
+-- son efectos: Mine (picar, en bucle mientras mantienes E), Place (dejar/retirar un mineral en un
+-- estante), Gain (cobrar dinero) y Alarm (aparece el ovni).
+Config.Sounds = {
+	Music = 0,
+	Chase = 0,
+	Mine = 0,
+	Place = 0,
+	Gain = 0,
+	Alarm = 0,
+}
+
 Config.StartingMoney = 100
 Config.InventorySize = 10 -- espacios de la mochila
 Config.HotbarSize = 5 -- espacios visibles en el HUD normal
@@ -50,31 +62,31 @@ end
 -- MinZone: primera zona donde puede aparecer. Dentro de cada rareza, mientras más profundo
 -- vas, más variedad (y los minerales nuevos son un poco más valiosos).
 Config.Minerals = {
-	{ Id = "LunarRock", Name = "Roca lunar", Rarity = "Common", Family = "Normal", Value = 150, MinZone = 1 },
-	{ Id = "Iron", Name = "Hierro", Rarity = "Common", Family = "Normal", Value = 180, MinZone = 1 },
-	{ Id = "Copper", Name = "Cobre", Rarity = "Common", Family = "Normal", Value = 220, MinZone = 1 },
-	{ Id = "Aluminium", Name = "Aluminio", Rarity = "Common", Family = "Normal", Value = 240, MinZone = 3 },
-	{ Id = "LunarQuartz", Name = "Cuarzo lunar", Rarity = "Uncommon", Family = "Normal", Value = 480, MinZone = 1 },
-	{ Id = "IceCrystal", Name = "Cristal helado", Rarity = "Uncommon", Family = "Normal", Value = 600, MinZone = 1 },
-	{ Id = "MoonSapphire", Name = "Zafiro lunar", Rarity = "Uncommon", Family = "Normal", Value = 540, MinZone = 3 },
-	{ Id = "SpaceAmber", Name = "Ámbar espacial", Rarity = "Uncommon", Family = "Normal", Value = 660, MinZone = 5 },
-	{ Id = "Uranium", Name = "Uranio brillante", Rarity = "Rare", Family = "Radiactivo", Value = 1400, MinZone = 1 },
-	{ Id = "RadioCrystal", Name = "Cristal radiactivo", Rarity = "Rare", Family = "Radiactivo", Value = 1850, MinZone = 2 },
-	{ Id = "Thorium", Name = "Torio", Rarity = "Rare", Family = "Radiactivo", Value = 1600, MinZone = 5 },
-	{ Id = "BlueIsotope", Name = "Isótopo azul", Rarity = "Rare", Family = "Radiactivo", Value = 2000, MinZone = 7 },
-	{ Id = "Meteorite", Name = "Fragmento de meteorito", Rarity = "Epic", Family = "Extraterrestre", Value = 4200, MinZone = 4 },
-	{ Id = "AlienCrystal", Name = "Cristal alienígena", Rarity = "Epic", Family = "Extraterrestre", Value = 5400, MinZone = 4 },
-	{ Id = "CometShard", Name = "Fragmento de cometa", Rarity = "Epic", Family = "Extraterrestre", Value = 4700, MinZone = 7 },
-	{ Id = "AlienOrb", Name = "Esfera alienígena", Rarity = "Epic", Family = "Extraterrestre", Value = 5800, MinZone = 9 },
-	{ Id = "MutantSpores", Name = "Esporas mutantes", Rarity = "Exotic", Family = "Mutante", Value = 12500, MinZone = 7 },
-	{ Id = "MutantCore", Name = "Núcleo mutante", Rarity = "Exotic", Family = "Mutante", Value = 16500, MinZone = 7 },
-	{ Id = "MutantMold", Name = "Moho mutante", Rarity = "Exotic", Family = "Mutante", Value = 14000, MinZone = 9 },
-	{ Id = "ChimeraGem", Name = "Gema quimera", Rarity = "Exotic", Family = "Mutante", Value = 17500, MinZone = 11 },
-	{ Id = "MoonHeart", Name = "Corazón de la Luna", Rarity = "Legendary", Family = "Especial", Value = 38000, MinZone = 11 },
-	{ Id = "UfoPiece", Name = "Pieza de ovni", Rarity = "Legendary", Family = "Especial", Value = 48000, MinZone = 11 },
-	{ Id = "FallenStar", Name = "Estrella caída", Rarity = "Legendary", Family = "Especial", Value = 42000, MinZone = 12 },
-	{ Id = "BlackHoleCore", Name = "Núcleo de agujero negro", Rarity = "Legendary", Family = "Especial", Value = 52000, MinZone = 13 },
-	{ Id = "OriginCrystal", Name = "Cristal del origen", Rarity = "Legendary", Family = "Especial", Value = 56000, MinZone = 14 },
+	{ Id = "LunarRock", Name = "Roca lunar", Rarity = "Common", Family = "Normal", Value = 150, MinZone = 1, Color = Color3.fromRGB(150, 150, 158) },
+	{ Id = "Iron", Name = "Hierro", Rarity = "Common", Family = "Normal", Value = 180, MinZone = 1, Color = Color3.fromRGB(115, 130, 155) },
+	{ Id = "Copper", Name = "Cobre", Rarity = "Common", Family = "Normal", Value = 220, MinZone = 1, Color = Color3.fromRGB(205, 125, 70) },
+	{ Id = "Aluminium", Name = "Aluminio", Rarity = "Common", Family = "Normal", Value = 240, MinZone = 3, Color = Color3.fromRGB(205, 212, 224) },
+	{ Id = "LunarQuartz", Name = "Cuarzo lunar", Rarity = "Uncommon", Family = "Normal", Value = 480, MinZone = 1, Color = Color3.fromRGB(232, 226, 255) },
+	{ Id = "IceCrystal", Name = "Cristal helado", Rarity = "Uncommon", Family = "Normal", Value = 600, MinZone = 1, Color = Color3.fromRGB(140, 222, 255) },
+	{ Id = "MoonSapphire", Name = "Zafiro lunar", Rarity = "Uncommon", Family = "Normal", Value = 540, MinZone = 3, Color = Color3.fromRGB(70, 110, 235) },
+	{ Id = "SpaceAmber", Name = "Ámbar espacial", Rarity = "Uncommon", Family = "Normal", Value = 660, MinZone = 5, Color = Color3.fromRGB(255, 175, 50) },
+	{ Id = "Uranium", Name = "Uranio brillante", Rarity = "Rare", Family = "Radiactivo", Value = 1400, MinZone = 1, Color = Color3.fromRGB(110, 230, 80) },
+	{ Id = "RadioCrystal", Name = "Cristal radiactivo", Rarity = "Rare", Family = "Radiactivo", Value = 1850, MinZone = 2, Color = Color3.fromRGB(195, 255, 60) },
+	{ Id = "Thorium", Name = "Torio", Rarity = "Rare", Family = "Radiactivo", Value = 1600, MinZone = 5, Color = Color3.fromRGB(215, 205, 125) },
+	{ Id = "BlueIsotope", Name = "Isótopo azul", Rarity = "Rare", Family = "Radiactivo", Value = 2000, MinZone = 7, Color = Color3.fromRGB(60, 140, 255) },
+	{ Id = "Meteorite", Name = "Fragmento de meteorito", Rarity = "Epic", Family = "Extraterrestre", Value = 4200, MinZone = 4, Color = Color3.fromRGB(160, 95, 60) },
+	{ Id = "AlienCrystal", Name = "Cristal alienígena", Rarity = "Epic", Family = "Extraterrestre", Value = 5400, MinZone = 4, Color = Color3.fromRGB(185, 95, 255) },
+	{ Id = "CometShard", Name = "Fragmento de cometa", Rarity = "Epic", Family = "Extraterrestre", Value = 4700, MinZone = 7, Color = Color3.fromRGB(150, 232, 255) },
+	{ Id = "AlienOrb", Name = "Esfera alienígena", Rarity = "Epic", Family = "Extraterrestre", Value = 5800, MinZone = 9, Color = Color3.fromRGB(110, 255, 205) },
+	{ Id = "MutantSpores", Name = "Esporas mutantes", Rarity = "Exotic", Family = "Mutante", Value = 12500, MinZone = 7, Color = Color3.fromRGB(170, 220, 90) },
+	{ Id = "MutantCore", Name = "Núcleo mutante", Rarity = "Exotic", Family = "Mutante", Value = 16500, MinZone = 7, Color = Color3.fromRGB(255, 75, 125) },
+	{ Id = "MutantMold", Name = "Moho mutante", Rarity = "Exotic", Family = "Mutante", Value = 14000, MinZone = 9, Color = Color3.fromRGB(105, 165, 65) },
+	{ Id = "ChimeraGem", Name = "Gema quimera", Rarity = "Exotic", Family = "Mutante", Value = 17500, MinZone = 11, Color = Color3.fromRGB(255, 125, 220) },
+	{ Id = "MoonHeart", Name = "Corazón de la Luna", Rarity = "Legendary", Family = "Especial", Value = 38000, MinZone = 11, Color = Color3.fromRGB(255, 235, 165) },
+	{ Id = "UfoPiece", Name = "Pieza de ovni", Rarity = "Legendary", Family = "Especial", Value = 48000, MinZone = 11, Color = Color3.fromRGB(170, 255, 205) },
+	{ Id = "FallenStar", Name = "Estrella caída", Rarity = "Legendary", Family = "Especial", Value = 42000, MinZone = 12, Color = Color3.fromRGB(255, 220, 60) },
+	{ Id = "BlackHoleCore", Name = "Núcleo de agujero negro", Rarity = "Legendary", Family = "Especial", Value = 52000, MinZone = 13, Color = Color3.fromRGB(125, 75, 195) },
+	{ Id = "OriginCrystal", Name = "Cristal del origen", Rarity = "Legendary", Family = "Especial", Value = 56000, MinZone = 14, Color = Color3.fromRGB(255, 150, 255) },
 }
 
 Config.MineralsById = {}
@@ -96,10 +108,14 @@ function Config.GetFusionTarget(rarityId)
 	return Config.Rarities[rarity.Index + 1]
 end
 
-function Config.GetRarityColor(mineralId)
+-- Cada mineral tiene su propio color, acorde a su nombre (Isótopo azul es azul).
+function Config.GetMineralColor(mineralId)
 	local mineral = Config.MineralsById[mineralId]
-	return mineral and Config.RaritiesById[mineral.Rarity].Color or Color3.fromRGB(190, 190, 205)
+	return mineral and mineral.Color or Color3.fromRGB(190, 190, 205)
 end
+
+-- (nombre antiguo, se mantiene por compatibilidad)
+Config.GetRarityColor = Config.GetMineralColor
 
 ----------------------------------------------------------------------
 -- Estantes de la fabrica: cada mineral que dejas en un estante genera creditos solo.
@@ -240,12 +256,19 @@ local function zoneWeights(zone)
 	return weights
 end
 
+-- Nombres de las zonas de la mina (de la entrada al fondo).
+local ZONE_NAMES = {
+	"Cráter Brillante", "Valle de Polvo", "Cueva de Cristal", "Túnel Helado", "Mar de Ceniza",
+	"Colinas Plateadas", "Grieta Radiactiva", "Cañón Meteorito", "Laguna Alienígena", "Abismo Mutante",
+	"Nido Cósmico", "Volcán Estelar", "Ruinas Alienígenas", "Corazón Oscuro", "Núcleo Lunar",
+}
+
 Config.Zones = {}
 for zone = 1, Config.ZoneCount do
 	local t = (zone - 1) / (Config.ZoneCount - 1)
 	local gray = math.floor(172 - 80 * t)
 	Config.Zones[zone] = {
-		Name = "Zona " .. zone,
+		Name = ZONE_NAMES[zone],
 		Color = Color3.fromRGB(gray, gray - 2, gray + 4),
 		GemColor = Color3.fromHSV((0.35 + zone * 0.11) % 1, 0.55, 1),
 		Weights = zoneWeights(zone),
@@ -337,6 +360,8 @@ Config.Upgrades = {
 	Speed = { Label = "Velocidad", BaseCost = 2500, Growth = 1.65, MaxLevel = 20 },
 	Strength = { Label = "Fuerza", BaseCost = 5000, Growth = 1.7, MaxLevel = 15 },
 	Pickaxe = { Label = "Pico", BaseCost = 15000, Growth = 4.5, MaxLevel = 6 },
+	-- Capacidad: cuántos minerales puedes llevar por viaje (nivel + 1, hasta 5).
+	Capacity = { Label = "Capacidad", BaseCost = 30000, Growth = 8, MaxLevel = 4 },
 }
 -- Productos de Robux (tiendas del lado derecho). Id = 0 significa "aun no configurado":
 -- se muestra "Proximamente". Cuando se creen los pases / productos en Roblox, se pone su Id.
@@ -367,7 +392,13 @@ Config.RobuxProducts = {
 	},
 }
 
-Config.UpgradeOrder = { "Speed", "Strength", "Pickaxe" }
+Config.UpgradeOrder = { "Speed", "Strength", "Pickaxe", "Capacity" }
+
+-- Minerales que puedes llevar a la vez, y cuánto te frena cada mineral extra (5 % por cada uno).
+function Config.GetCarryCapacity(level)
+	return 1 + (level or 0)
+end
+Config.CarrySlowPerExtra = 0.05
 
 function Config.GetUpgradeCost(kind, level)
 	local upgrade = Config.Upgrades[kind]
@@ -392,24 +423,41 @@ Config.CreditsPack = { Hours = 0.5, Min = 25000 }
 -- Ovni
 ----------------------------------------------------------------------
 
--- Cada zona pide un nivel mínimo de velocidad. El ovni va un poco más rápido que un jugador
--- con ese nivel mínimo (ver Margin): con el nivel mínimo o más no te alcanza, con menos puede
--- alcanzarte, y mientras menos nivel tengas, antes te atrapa. Un jugador con nivel máximo
--- (40 de velocidad) siempre se salva.
-Config.ZoneMinSpeedLevel = { 0, 2, 3, 4, 6, 7, 9, 10, 11, 13, 14, 16, 17, 19, 20 }
+-- Cada zona tiene un nivel de velocidad "seguro": con ese nivel (o más) el ovni no te alcanza.
+-- Un nivel por debajo ya es arriesgado, y con dos o más niveles menos casi siempre te alcanza,
+-- incluso en las primeras zonas. En la última zona el nivel seguro es el máximo (20).
+Config.ZoneSafeSpeedLevel = { 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 19, 20 }
 
 Config.Ufo = {
-	Margin = 3, -- studs/s que el ovni supera al jugador con el nivel mínimo de la zona
+	Margin = 2.6, -- studs/s que el ovni supera al jugador con el nivel seguro de la zona
 	SpawnDelay = 2, -- segundos entre sacar el mineral y que aparezca
-	SpawnDistance = 50, -- studs detrás del jugador (hacia el fondo de la mina)
+	SpawnDistance = 40, -- studs detrás del jugador (hacia el fondo de la mina)
 	HoverHeight = 8, -- altura sobre el jugador
 	CatchDistance = 4, -- distancia horizontal a la que atrapa
+	-- Cuántos ovnis te persiguen según la zona donde sacaste el mineral.
+	SecondUfoZone = 8,
+	ThirdUfoZone = 14,
+	-- Desde esta zona los ovnis disparan un rayo que te frena un momento.
+	ShootFromZone = 8,
+	ShotCooldown = 6, -- segundos entre disparos de cada ovni
+	ShotRange = 90, -- solo disparan si estás a menos de esta distancia
+	SlowAmount = 0.3, -- el rayo te frena un 30 %...
+	SlowSeconds = 1.2, -- ...durante este tiempo
 }
+
+function Config.GetUfoCount(zone)
+	if zone >= Config.Ufo.ThirdUfoZone then
+		return 3
+	elseif zone >= Config.Ufo.SecondUfoZone then
+		return 2
+	end
+	return 1
+end
 
 -- Velocidad del ovni según la zona en que va el jugador.
 function Config.GetUfoSpeed(depth)
-	local minLevel = Config.ZoneMinSpeedLevel[Config.GetZone(depth)]
-	return Config.GetWalkSpeed(minLevel) + Config.Ufo.Margin
+	local safeLevel = Config.ZoneSafeSpeedLevel[Config.GetZone(depth)]
+	return Config.GetWalkSpeed(safeLevel) + Config.Ufo.Margin
 end
 
 return Config

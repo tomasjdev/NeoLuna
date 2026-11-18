@@ -232,6 +232,101 @@ local function buildSun(world)
 	end)
 end
 
+-- Cielo con vida: campo de estrellas, nebulosas de colores y otros planetas, para que la noche
+-- no sea un negro vacío. Todo son paneles lejanos dibujados con interfaz (como la Tierra).
+local function buildSkyExtras(world)
+	local rng = Random.new(7)
+	local center = WORLD_CENTER + Vector3.new(0, 20, 0)
+	local DISTANCE = 1800
+
+	-- Posición en el cielo: acimut (grados desde +X) y elevación.
+	local function skyPosition(azimuth, elevation)
+		local a, e = math.rad(azimuth), math.rad(elevation)
+		return center + Vector3.new(math.cos(a) * math.cos(e), math.sin(e), math.sin(a) * math.cos(e)) * DISTANCE
+	end
+
+	local function root(gui)
+		local frame = Instance.new("Frame")
+		frame.Size = UDim2.fromScale(1, 1)
+		frame.BackgroundTransparency = 1
+		frame.Parent = gui
+		return frame
+	end
+
+	-- Estrellas: puntitos de distintos tamaños y tonos (6 paneles alrededor y 1 arriba).
+	local function stars(gui)
+		local r = root(gui)
+		local tones = { c(255, 255, 255), c(255, 240, 200), c(190, 215, 255), c(255, 205, 220) }
+		for _ = 1, 170 do
+			local size = rng:NextNumber(0.0025, 0.0085)
+			local star = Instance.new("Frame")
+			star.AnchorPoint = Vector2.new(0.5, 0.5)
+			star.Position = UDim2.fromScale(rng:NextNumber(0.03, 0.97), rng:NextNumber(0.03, 0.97))
+			star.Size = UDim2.fromScale(size, size)
+			star.BackgroundColor3 = tones[rng:NextInteger(1, #tones)]
+			star.BackgroundTransparency = rng:NextNumber(0, 0.45)
+			star.BorderSizePixel = 0
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0.5, 0)
+			corner.Parent = star
+			star.Parent = r
+		end
+	end
+	for i = 0, 5 do
+		skyPanel(world, "Stars" .. i, skyPosition(i * 60 + 10, 26), 2000, 1024, stars)
+	end
+	skyPanel(world, "StarsTop", skyPosition(0, 78), 2000, 1024, stars)
+
+	-- Nebulosas: manchas grandes y suaves de colores.
+	local function nebula(palette)
+		return function(gui)
+			local r = root(gui)
+			for _ = 1, 16 do
+				local d = rng:NextNumber(0.25, 0.6)
+				circle(r, Vector2.new(rng:NextNumber(0.25, 0.75), rng:NextNumber(0.25, 0.75)), d, palette[rng:NextInteger(1, #palette)], rng:NextNumber(0.9, 0.965))
+			end
+		end
+	end
+	skyPanel(world, "NebulaA", skyPosition(150, 24), 1500, 512, nebula({ c(150, 80, 230), c(90, 70, 210), c(230, 90, 190) }))
+	skyPanel(world, "NebulaB", skyPosition(235, 38), 1300, 512, nebula({ c(60, 190, 220), c(60, 120, 230), c(110, 230, 190) }))
+	skyPanel(world, "NebulaC", skyPosition(315, 30), 1400, 512, nebula({ c(240, 110, 90), c(230, 160, 80), c(200, 70, 150) }))
+
+	-- Planetas.
+	skyPanel(world, "GasGiant", skyPosition(195, 20), 760, 512, function(gui)
+		local r = root(gui)
+		blob(r, Vector2.new(0.5, 0.5), 1.0, 0.2, -18, c(235, 215, 175), 0.45) -- anillo
+		circle(r, Vector2.new(0.5, 0.5), 0.62, c(225, 165, 105))
+		for _, row in { { 0.36, 0.52, c(190, 120, 75) }, { 0.46, 0.55, c(245, 205, 150) }, { 0.56, 0.5, c(185, 115, 80) }, { 0.65, 0.4, c(240, 195, 140) } } do
+			blob(r, Vector2.new(0.5, row[1]), row[2], 0.05, 0, row[3], 0.15)
+		end
+		circle(r, Vector2.new(0.58, 0.54), 0.62, c(0, 5, 25), 0.65) -- sombra
+		blob(r, Vector2.new(0.5, 0.54), 1.02, 0.07, -18, c(235, 215, 175), 0.4) -- anillo por delante
+	end)
+	skyPanel(world, "PurplePlanet", skyPosition(120, 34), 420, 512, function(gui)
+		local r = root(gui)
+		circle(r, Vector2.new(0.5, 0.5), 1.0, c(190, 130, 255), 0.88)
+		circle(r, Vector2.new(0.5, 0.5), 0.82, c(125, 80, 205))
+		circle(r, Vector2.new(0.4, 0.38), 0.4, c(160, 115, 235), 0.5)
+		circle(r, Vector2.new(0.62, 0.62), 0.12, c(100, 60, 175), 0.3)
+		circle(r, Vector2.new(0.36, 0.64), 0.08, c(100, 60, 175), 0.3)
+		circle(r, Vector2.new(0.62, 0.5), 0.82, c(0, 5, 25), 0.6)
+	end)
+	skyPanel(world, "RedPlanet", skyPosition(275, 17), 300, 512, function(gui)
+		local r = root(gui)
+		circle(r, Vector2.new(0.5, 0.5), 0.86, c(205, 95, 70))
+		blob(r, Vector2.new(0.5, 0.4), 0.7, 0.06, 6, c(235, 140, 100), 0.3)
+		blob(r, Vector2.new(0.5, 0.6), 0.74, 0.06, -4, c(165, 70, 55), 0.3)
+		circle(r, Vector2.new(0.6, 0.5), 0.86, c(0, 5, 25), 0.6)
+	end)
+	skyPanel(world, "IceMoon", skyPosition(335, 52), 200, 256, function(gui)
+		local r = root(gui)
+		circle(r, Vector2.new(0.5, 0.5), 0.84, c(200, 232, 255))
+		circle(r, Vector2.new(0.4, 0.4), 0.2, c(160, 205, 235), 0.2)
+		circle(r, Vector2.new(0.62, 0.6), 0.14, c(160, 205, 235), 0.2)
+		circle(r, Vector2.new(0.6, 0.5), 0.84, c(0, 5, 25), 0.6)
+	end)
+end
+
 -- Colinas lejanas redondeadas alrededor de todo el mundo.
 local function buildHills(world, rng)
 	-- La elipse cubre desde las bases (x = -300) hasta el fondo de la mina.
@@ -893,6 +988,10 @@ local UPGRADE_SHOPS = {
 		Npc = { Skin = 4, Hair = c(25, 20, 20), Hairstyle = "Bun", Accent = c(230, 90, 90), Wave = true },
 	},
 	{
+		Id = "Capacity", Kind = "Upgrade", Text = "CAPACIDAD", Accent = c(150, 110, 230), ObjectText = "Llevar más minerales",
+		Npc = { Skin = 2, Hair = c(60, 40, 90), Hairstyle = "Ponytail", Accent = c(150, 110, 230), Item = "Gem", ItemColor = c(185, 130, 255), Wave = true },
+	},
+	{
 		Id = "Speed", Kind = "Upgrade", Text = "VELOCIDAD", Accent = c(60, 170, 255), ObjectText = "Mejorar velocidad",
 		Npc = { Skin = 1, Hair = c(230, 190, 90), Hairstyle = "Short", Accent = c(60, 170, 255), Antenna = true, Wave = true },
 	},
@@ -1110,15 +1209,23 @@ local function buildMine(world, rng)
 	part({ Name = "EndWall", Size = Vector3.new(10, 24, HALF_WIDTH * 2 + 20), Position = Vector3.new(MINE_LENGTH + 5, 12, 0), Color = ROCK_DARK, Material = Enum.Material.Slate, CanCollide = true }, mine)
 
 	-- Arco de entrada y arcos al inicio de cada zona.
-	arch(mine, 0, 70, "MINA LUNAR - ZONA 1", c(255, 200, 40))
+	arch(mine, 0, 70, "MINA LUNAR - " .. Config.Zones[1].Name:upper(), c(255, 200, 40))
 	for zone = 2, Config.ZoneCount do
 		arch(mine, (zone - 1) * Config.ZoneLength, 70, Config.Zones[zone].Name:upper(), Config.Zones[zone].GemColor)
 	end
 
 	-- Carteles de profundidad cada 100 studs.
+	-- Grandes y altos, a los dos lados de la mina y con texto por ambas caras, para leerlos de
+	-- lejos y en los dos sentidos. Los cada 200 studs (inicio de zona) llevan color de aviso.
 	for depth = 100, MINE_LENGTH, 100 do
-		part({ Name = "MarkerPost", Shape = Enum.PartType.Cylinder, Size = Vector3.new(7, 0.9, 0.9), CFrame = CFrame.new(depth, 3.5, -HALF_WIDTH + 12) * VERTICAL, Color = STEEL, Material = Enum.Material.Metal }, mine)
-		board(mine, facingBase(Vector3.new(depth, 8, -HALF_WIDTH + 12)), Vector3.new(7, 3, 0.5), depth .. " m", PANEL_DARK, WHITE)
+		local zoneStart = depth % Config.ZoneLength == 0
+		local textColor = if zoneStart then c(255, 215, 70) else WHITE
+		for _, side in { -1, 1 } do
+			local z = side * (HALF_WIDTH - 14)
+			part({ Name = "MarkerPost", Shape = Enum.PartType.Cylinder, Size = Vector3.new(15, 1.4, 1.4), CFrame = CFrame.new(depth, 7.5, z) * VERTICAL, Color = STEEL, Material = Enum.Material.Metal }, mine)
+			board(mine, facingBase(Vector3.new(depth, 16, z)), Vector3.new(15, 6, 0.8), depth .. " m", PANEL_DARK, textColor)
+			board(mine, CFrame.lookAt(Vector3.new(depth, 16, z), Vector3.new(depth, 16, z) + Vector3.new(1, 0, 0)), Vector3.new(15, 6, 0.8), depth .. " m", PANEL_DARK, textColor)
+		end
 	end
 end
 
@@ -1134,6 +1241,7 @@ function WorldBuilder.Build()
 	buildHills(world, rng)
 	buildEarth(world)
 	buildSun(world)
+	buildSkyExtras(world)
 	buildMine(world, rng)
 	buildBoundary(world, rng)
 	local fuse = buildPlaza(world)

@@ -38,6 +38,7 @@ local store = ProfileStore.New("MinerosLunares_v1", {
 	Speed = 0,
 	Strength = 0,
 	Pickaxe = 0,
+	Capacity = 0, -- nivel de capacidad (minerales por viaje = nivel + 1)
 	Inventory = {}, -- lista de ids de minerales (máx. Config.InventorySize)
 	Stands = emptyStands(), -- mineral en cada estante ("" = vacío)
 	StandSince = zeroTimes(), -- os.time() desde que se empezó a juntar en cada estante

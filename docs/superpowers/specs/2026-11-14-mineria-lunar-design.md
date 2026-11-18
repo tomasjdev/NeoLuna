@@ -124,9 +124,17 @@ con buena probabilidad si el pico es bueno.
 - **15 zonas** de 200 studs (mina de 3.000). La rareza de cada zona sale de una curva: cada
   rareza es más común en su "zona central" (Común 1, Poco común 3-4, Raro 6-7, Épico 9-10,
   Exótico 12-13, Legendario 15+); los Comunes y Poco comunes nunca desaparecen del todo.
-- **Velocidad mínima por zona** (nivel): 0, 2, 3, 4, 6, 7, 9, 10, 11, 13, 14, 16, 17, 19, 20.
-  El ovni va 3 studs/s más rápido que un jugador con ese nivel; con el nivel mínimo o más no
-  alcanza, con menos puede alcanzarte (tiene que haber 50 studs de ventaja: aparece a 50 detrás).
+- **Velocidad segura por zona** (nivel): 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 19, 20.
+  El ovni va 2,6 studs/s más rápido que un jugador con ese nivel y aparece a 40 studs detrás.
+  Con el nivel seguro o más no te alcanza; con 1 nivel menos es arriesgado (~40 %) y con 2 o
+  más niveles menos casi siempre te alcanza, también en las primeras zonas. Solo con el nivel
+  20 se está a salvo en la última zona.
+- **Capacidad:** nueva mejora (hasta nivel 4 = 5 minerales por viaje, $30.000 × 8^nivel). Se
+  pueden picar varios minerales antes de volver; el ovni sale con el primero y cada mineral
+  extra frena un 5 %. Si el ovni te alcanza pierdes todos (el escudo los salva).
+- **Nombres de zonas:** Cráter Brillante, Valle de Polvo, Cueva de Cristal, Túnel Helado, Mar de
+  Ceniza, Colinas Plateadas, Grieta Radiactiva, Cañón Meteorito, Laguna Alienígena, Abismo
+  Mutante, Nido Cósmico, Volcán Estelar, Ruinas Alienígenas, Corazón Oscuro y Núcleo Lunar.
 - **Costos:** Velocidad 2.500 × 1,65^nivel; Fuerza 5.000 × 1,7^nivel; Pico 15.000 × 4,5^nivel;
   pisos 200 mil / 1,2 M / 7 M / 40 M; estantes 15 mil / 60 mil / 250 mil / 1 M / 4 M (se
   duplica en cada estante). Tiempo de picado: 1 s + 0,25 s por zona.
