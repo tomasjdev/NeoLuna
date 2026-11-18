@@ -120,13 +120,17 @@ function Effects.gain(text)
 		return
 	end
 	Effects.play("Gain", 0.5)
+	local touch = game:GetService("UserInputService").TouchEnabled
+	-- Siempre justo debajo del panel de dinero (la pantalla de efectos no tiene margen superior).
+	local startY = if touch then 48 else 114
+	local rightX = if touch then -16 else -34
 	local label = new("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -34, 0, 114), -- debajo del panel de dinero (la pantalla de efectos no tiene margen superior)
+		Position = UDim2.new(1, rightX, 0, startY),
 		Size = UDim2.fromOffset(240, 40),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.FredokaOne,
-		TextSize = 34,
+		TextSize = if touch then 26 else 34,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextColor3 = Color3.fromRGB(95, 235, 125),
 		TextStrokeColor3 = Color3.fromRGB(10, 70, 40),
@@ -140,7 +144,7 @@ function Effects.gain(text)
 	end)
 	task.delay(0.9, function()
 		tween(label, 0.9, {
-			Position = UDim2.new(1, -34, 0, 138),
+			Position = UDim2.new(1, rightX, 0, startY + 24),
 			TextTransparency = 1,
 			TextStrokeTransparency = 1,
 		})
@@ -381,11 +385,14 @@ function Effects.mount(playerGui)
 	local touch = game:GetService("UserInputService").TouchEnabled
 	stack = new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, if touch then 190 else 160),
+		Position = UDim2.new(0.5, 0, 0, if touch then 62 else 160),
 		Size = UDim2.fromOffset(720, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 	}, gui)
+	if touch then
+		new("UIScale", { Scale = 0.75 }, stack) -- avisos más pequeños en celular
+	end
 	new("UIListLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 8),

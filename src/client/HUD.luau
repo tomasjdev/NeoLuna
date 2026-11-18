@@ -179,12 +179,14 @@ function HUD.mount(parent, ui, handlers)
 	local moneyPanel = scope:New "Frame" {
 		Name = "Money",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -20, 0, 20),
+		Position = if game:GetService("UserInputService").TouchEnabled then UDim2.new(1, -8, 0, 4) else UDim2.new(1, -20, 0, 20),
 		Size = UDim2.fromOffset(250, 50),
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
 
 		[Children] = {
+			-- En celular el dinero es más pequeño y va pegado arriba a la derecha.
+			scope:New "UIScale" { Scale = if game:GetService("UserInputService").TouchEnabled then 0.72 else 1 },
 			rounded(16),
 			scope:New "UIStroke" { Color = BORDER, Thickness = 3 },
 			scope:New "Frame" {
@@ -224,12 +226,12 @@ function HUD.mount(parent, ui, handlers)
 	local zoneIndex = scope:Computed(function(use)
 		return Config.GetZone(use(ui.depth))
 	end)
-	local touchScale = if game:GetService("UserInputService").TouchEnabled then 1.3 else 1
+	local touchScale = if game:GetService("UserInputService").TouchEnabled then 0.72 else 1
 
 	local statusPanel = scope:New "Frame" {
 		Name = "Status",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 16),
+		Position = UDim2.new(0.5, 0, 0, if touchScale < 1 then 4 else 16),
 		Size = UDim2.fromOffset(400, 66),
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
@@ -407,7 +409,7 @@ function HUD.mount(parent, ui, handlers)
 	local backpackPanel = scope:New "Frame" {
 		Name = "Backpack",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.45),
+		Position = UDim2.fromScale(0.5, 0.4),
 		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
 		BackgroundColor3 = WHITE,
@@ -659,8 +661,8 @@ function HUD.mount(parent, ui, handlers)
 
 	local shopPanel = scope:New "Frame" {
 		Name = "Shop",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 20, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.4),
 		Size = UDim2.fromOffset(300, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = WHITE,
@@ -740,7 +742,7 @@ function HUD.mount(parent, ui, handlers)
 	local robuxPanel = scope:New "Frame" {
 		Name = "RobuxShop",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.45),
+		Position = UDim2.fromScale(0.5, 0.4),
 		Size = UDim2.fromOffset(360, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = WHITE,
@@ -966,8 +968,8 @@ function HUD.mount(parent, ui, handlers)
 
 	local fusePanel = scope:New "Frame" {
 		Name = "Fusion",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 20, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.4),
 		Size = UDim2.fromOffset(340, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = WHITE,
@@ -1008,8 +1010,8 @@ function HUD.mount(parent, ui, handlers)
 
 	local rebirthPanel = scope:New "Frame" {
 		Name = "Rebirth",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 20, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.4),
 		Size = UDim2.fromOffset(340, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = WHITE,
@@ -1193,9 +1195,18 @@ function HUD.mount(parent, ui, handlers)
 		},
 	}
 
+	-- Paneles centrados y, en celular, más pequeños para no chocar con la mochila de abajo.
+	if game:GetService("UserInputService").TouchEnabled then
+		for _, panel in { shopPanel, robuxPanel, fusePanel, rebirthPanel, backpackPanel } do
+			scope:New "UIScale" { Scale = 0.72, Parent = panel }
+		end
+	end
+
 	scope:New "ScreenGui" {
 		Name = "NeoLunaHUD",
 		ResetOnSpawn = false,
+		-- En celular se usa toda la pantalla, para que la zona y el dinero queden bien arriba.
+		IgnoreGuiInset = game:GetService("UserInputService").TouchEnabled,
 		Parent = parent,
 		[Children] = { moneyPanel, statusPanel, noticePanel, hotbar, backpackPanel, shopPanel, robuxPanel, fusePanel, rebirthPanel, giftOfferPanel },
 	}
