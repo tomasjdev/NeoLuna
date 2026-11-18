@@ -124,7 +124,7 @@ end
 
 -- Arma el modelo con sus piezas, colocadas respecto a `origin` (la base del modelo).
 -- `overrides[parte]` puede cambiar Tint, Material, Transparency, CanCollide.
-function ArtLibrary.Build(assetName, origin, overrides)
+function ArtLibrary.Build(assetName, origin, overrides, scale)
 	local parts = templates[assetName]
 	if not parts then
 		return nil
@@ -137,8 +137,8 @@ function ArtLibrary.Build(assetName, origin, overrides)
 		local part = template:Clone()
 		part.Name = partName
 		part.Anchored = true
-		part.Size = info.Size
-		part.CFrame = origin * CFrame.new(info.Center)
+		part.Size = info.Size * (scale or 1)
+		part.CFrame = origin * CFrame.new(info.Center * (scale or 1))
 		part.Color = extra.Tint or info.Tint
 		part.Material = extra.Material or Enum.Material[info.Material]
 		part.Transparency = extra.Transparency or 0
@@ -199,6 +199,12 @@ function ArtLibrary.BuildShop(origin, text, accent)
 		return nil
 	end
 	model.Name = "Shop"
+	-- Toda la tienda es sólida (techo, toldo, cartel, columnas, antena...): no se atraviesa.
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			descendant.CanCollide = true
+		end
+	end
 	local sign = model:FindFirstChild("sign")
 	if sign then
 		local gui = Instance.new("SurfaceGui")

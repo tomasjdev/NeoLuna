@@ -114,6 +114,35 @@ function Props.PickaxeTool()
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
 
+	-- El pico diseñado en Blender (mango con cinta, cabeza de metal curva y gemas). Si no cargó,
+	-- se usa el sencillo de abajo.
+	local art = ArtLibrary.IsReady("pickaxe") and ArtLibrary.Build("pickaxe", CFrame.identity, nil, 0.75)
+	if art then
+		local handle = art:FindFirstChild("handle")
+		if handle then
+			handle.Name = "Handle"
+			for _, piece in art:GetChildren() do
+				piece.Anchored = false
+				piece.Massless = true
+				piece.CanCollide = false
+				piece.CanTouch = false
+				piece.CanQuery = false
+				piece.Parent = tool
+			end
+			for _, piece in tool:GetChildren() do
+				if piece:IsA("BasePart") and piece ~= handle then
+					local weld = Instance.new("WeldConstraint")
+					weld.Part0 = handle
+					weld.Part1 = piece
+					weld.Parent = piece
+				end
+			end
+			art:Destroy()
+			return tool
+		end
+		art:Destroy()
+	end
+
 	local function piece(name, size, offset, color, shape)
 		local p = Instance.new("Part")
 		p.Name = name

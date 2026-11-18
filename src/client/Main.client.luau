@@ -647,6 +647,16 @@ if not fxOk then
 	warn("[Effects] No se pudieron crear los efectos:", fxError)
 end
 
+-- Cielo con estrellas, nebulosas y planetas que sigue a la cámara (opcional).
+task.spawn(function()
+	local ok, err = pcall(function()
+		require(script.Parent.SkyDome).start()
+	end)
+	if not ok then
+		warn("[SkyDome] No se pudo crear el cielo:", err)
+	end
+end)
+
 -- Naves y objetos que ambientan el cielo (opcional: si fallan, no pasa nada).
 task.spawn(function()
 	local ok, err = pcall(function()

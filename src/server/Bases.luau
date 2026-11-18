@@ -14,6 +14,7 @@ local Bases = {}
 local list = {} -- { Spawn, Label, Center, Index, Plate, Stands, Floors, Terminal } por cada base
 local owners = {} -- índice de base -> player
 local assigned = {} -- player -> índice de base
+local lastBase = {} -- UserId -> base que tuvo (si vuelve a entrar al mismo servidor, la recupera)
 
 local LOCKED_PEDESTAL = Color3.fromRGB(110, 114, 126)
 local LOCKED_TOP = Color3.fromRGB(80, 84, 96)
@@ -169,7 +170,7 @@ function Bases.Assign(player)
 	end
 
 	local index
-	local preferred = RunService:IsStudio() and Config.DevPreferredBase or nil
+	local preferred = RunService:IsStudio() and Config.DevPreferredBase or lastBase[player.UserId]
 	if preferred and list[preferred] and not owners[preferred] then
 		index = preferred
 	else
@@ -191,6 +192,12 @@ function Bases.Assign(player)
 	list[index].Label.Text = ("%s\n$0"):format(player.DisplayName)
 	list[index].Label.Parent.Enabled = true
 	return index
+end
+
+-- Punto de aparición de la base del jugador (nil si no tiene base).
+function Bases.GetSpawn(player)
+	local index = assigned[player]
+	return index and list[index].Spawn
 end
 
 function Bases.GetIndex(player)
@@ -223,6 +230,7 @@ function Bases.Release(player)
 		return
 	end
 	assigned[player] = nil
+	lastBase[player.UserId] = index
 	owners[index] = nil
 	list[index].Plate:SetAttribute("OwnerUserId", nil)
 	list[index].Label.Text = ""

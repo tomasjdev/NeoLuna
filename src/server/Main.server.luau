@@ -250,10 +250,25 @@ end)
 
 local function onPlayerAdded(player)
 	Bases.Assign(player) -- antes de que aparezca el personaje
-	player.CharacterAdded:Connect(function()
+
+	-- Siempre se aparece en la propia base (también si el personaje ya había aparecido en otro
+	-- lado antes de que se le asignara la base).
+	local function sendToBase(character)
+		local spawn = Bases.GetSpawn(player)
+		local root = character:WaitForChild("HumanoidRootPart", 10)
+		if spawn and root then
+			task.wait()
+			root.CFrame = spawn.CFrame + Vector3.new(0, 4, 0)
+		end
+	end
+	player.CharacterAdded:Connect(function(character)
 		HeldMineral.Clear(player)
 		applyWalkSpeed(player)
+		task.spawn(sendToBase, character)
 	end)
+	if player.Character then
+		task.spawn(sendToBase, player.Character)
+	end
 	if Economy.Load(player) then
 		Robux.CheckPasses(player)
 		-- Lo que juntaron los estantes mientras no estaba (se cobra pisando las placas verdes).

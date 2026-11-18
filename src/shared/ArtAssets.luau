@@ -80,4 +80,10 @@ return {
 		asteroid_b = { Id = 71325000270395, Center = Vector3.new(0.0537, 0.2941, 0.4901), Size = Vector3.new(7.407, 6.1299, 6.1697), Tint = Color3.fromRGB(100, 98, 108), Material = "Slate" },
 		asteroid_c = { Id = 124620061036156, Center = Vector3.new(-0.3109, 0.6928, 0.9818), Size = Vector3.new(17.167, 11.8778, 12.3319), Tint = Color3.fromRGB(125, 116, 106), Material = "Slate" },
 	},
+	pickaxe = {
+		handle = { Id = 101165762670467, Center = Vector3.new(-0.0, 0.0, 0.19), Size = Vector3.new(0.638, 0.68, 4.7799), Tint = Color3.fromRGB(170, 118, 72), Material = "Wood" },
+		wrap = { Id = 137819836772531, Center = Vector3.new(0.0, 0.0, 1.1), Size = Vector3.new(0.68, 0.663, 0.9331), Tint = Color3.fromRGB(205, 70, 60), Material = "Fabric" },
+		head = { Id = 132495429854748, Center = Vector3.new(0.0, 0.0, -0.095), Size = Vector3.new(1.1, 5.1359, 5.41), Tint = Color3.fromRGB(175, 188, 210), Material = "Metal" },
+		gem = { Id = 109878213411899, Center = Vector3.new(0.0, 0.0, -2.2), Size = Vector3.new(1.3253, 0.3, 0.2853), Tint = Color3.fromRGB(255, 215, 90), Material = "Neon" },
+	},
 }
