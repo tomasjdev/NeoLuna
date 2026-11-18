@@ -138,6 +138,9 @@ function Props.PickaxeTool()
 				end
 			end
 			art:Destroy()
+			-- Se sostiene como un pico de verdad: el mango en vertical con la cabeza arriba, que
+			-- sobresale hacia adelante y hacia atrás, y la mano cerca del extremo del mango.
+			tool.Grip = (CFrame.new(0, 1.0, 0) * CFrame.Angles(math.rad(-90), 0, 0)):Inverse()
 			return tool
 		end
 		art:Destroy()

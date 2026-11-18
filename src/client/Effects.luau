@@ -19,6 +19,7 @@ local mineSound
 local banner
 local edges = {} -- los 4 bordes rojos
 local bannerOn = false -- el banner del ovni está parpadeando
+local welcomeCard -- la tarjeta de bienvenida que está en pantalla (si hay)
 local stack -- columna de avisos (arriba al centro): banner del ovni, bienvenida y avisos de texto
 local noticeOrder = 0
 local activeNotices = {}
@@ -153,6 +154,18 @@ end
 -- misma columna, uno debajo del otro, así que nunca se encima nada.
 
 -- Tarjeta de "bienvenido de vuelta".
+-- Quita la tarjeta de bienvenida al instante (cuando sale otro aviso).
+local function dismissWelcome()
+	local old = welcomeCard
+	welcomeCard = nil
+	if old and old.Parent then
+		tween(old, 0.25, { GroupTransparency = 1 })
+		task.delay(0.3, function()
+			old:Destroy()
+		end)
+	end
+end
+
 function Effects.welcome(amountText)
 	if not stack then
 		return
@@ -184,9 +197,14 @@ function Effects.welcome(amountText)
 		TextColor3 = Color3.fromRGB(40, 175, 90),
 		Text = amountText,
 	}, card)
+	welcomeCard = card
 	tween(card, 0.4, { GroupTransparency = 0 })
 	tween(stroke, 0.4, { Transparency = 0 })
 	task.delay(7, function()
+		if welcomeCard ~= card then
+			return
+		end
+		welcomeCard = nil
 		tween(card, 0.5, { GroupTransparency = 1 })
 		tween(stroke, 0.5, { Transparency = 1 })
 		task.delay(0.6, function()
@@ -200,6 +218,7 @@ function Effects.notice(text)
 	if not stack then
 		return false
 	end
+	dismissWelcome()
 	noticeOrder += 1
 	local group = new("CanvasGroup", {
 		LayoutOrder = 10 + noticeOrder,
@@ -285,6 +304,7 @@ function Effects.ufoAlert(count, wanted)
 	local total = wanted or count
 	banner.Text = if total > 1 then ("¡%d OVNIS TE PERSIGUEN!"):format(total) else "¡UN OVNI TE PERSIGUE!"
 	bannerOn = true
+	dismissWelcome()
 	banner.Visible = true
 end
 
@@ -319,7 +339,8 @@ local function updateChase()
 	end
 	-- Los bordes se ponen rojos mientras más cerca está el ovni (empieza a los 90 studs).
 	local distance = nearestUfo()
-	local danger = if distance then math.clamp(1 - distance / 90, 0, 1) else 0
+	-- Mientras el ovni aún no aparece, los bordes ya parpadean en rojo (aviso inmediato).
+	local danger = if distance then math.clamp(1 - distance / 90, 0.4, 1) else 0.5
 	local pulse = 0.5 + 0.5 * math.sin(t * (4 + danger * 8))
 	for _, edge in edges do
 		edge.BackgroundTransparency = 1 - danger * (0.35 + 0.35 * pulse)
@@ -360,7 +381,7 @@ function Effects.mount(playerGui)
 	local touch = game:GetService("UserInputService").TouchEnabled
 	stack = new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, if touch then 150 else 130),
+		Position = UDim2.new(0.5, 0, 0, if touch then 190 else 160),
 		Size = UDim2.fromOffset(720, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,

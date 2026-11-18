@@ -190,6 +190,8 @@ local function ensureUfos(player, carry, zone)
 		return
 	end
 	carry.UfosWanted = wanted
+	-- El aviso (banner y alarma) sale al instante, al recoger el mineral; los ovnis aparecen después.
+	remotes.UfoAlert:FireClient(player, wanted, wanted)
 	for index = #carry.Ufos + carry.UfosPending + 1, wanted do
 		carry.UfosPending += 1
 		task.delay(Config.Ufo.SpawnDelay + (index - 1) * 1.2, function()
@@ -207,7 +209,6 @@ local function ensureUfos(player, carry, zone)
 			ufo.Parent = workspace
 			table.insert(carry.Ufos, ufo)
 			carry.NextShot[ufo] = os.clock() + Config.Ufo.ShotCooldown * 0.6
-			remotes.UfoAlert:FireClient(player, #carry.Ufos, wanted)
 		end)
 	end
 end

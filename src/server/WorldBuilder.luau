@@ -846,7 +846,7 @@ local function buildShop(parent, position, facing, def)
 	local emblem = BuildingModels.Emblem(def.Id, origin * CFrame.new(0, 18, 0))
 	if def.Id == "Pickaxe" and ArtLibrary.IsReady("pickaxe") then
 		-- El mismo pico, grande y de pie sobre la tienda (la cabeza hacia arriba).
-		local big = ArtLibrary.Build("pickaxe", origin * CFrame.new(0, 18, 0) * CFrame.Angles(math.rad(90), 0, 0), nil, 2.4)
+		local big = ArtLibrary.Build("pickaxe", origin * CFrame.new(0, 18, 0) * CFrame.Angles(math.rad(-90), 0, 0), nil, 2.4)
 		if big then
 			emblem:Destroy()
 			emblem = big

@@ -118,10 +118,23 @@ function BuildingModels.Emblem(kind, origin)
 			piece(model, origin, Vector3.new(side * 4.8, 0, 0), Vector3.new(1.3, 4, 4), c(70, 70, 82), { Shape = Enum.PartType.Cylinder })
 		end
 	elseif kind == "Speed" then
+		-- Rayo en zigzag: tres tramos (arriba, travesaño y punta) con el mismo grosor.
 		local yellow = c(255, 215, 60)
-		piece(model, origin, Vector3.new(1.2, 3.3, 0), Vector3.new(2.2, 5, 1.2), yellow, { Rotation = CFrame.Angles(0, 0, math.rad(-22)) })
-		piece(model, origin, Vector3.new(0, 0.4, 0), Vector3.new(4.2, 1.7, 1.2), yellow)
-		piece(model, origin, Vector3.new(-1.2, -3, 0), Vector3.new(2.2, 5, 1.2), yellow, { Rotation = CFrame.Angles(0, 0, math.rad(-22)) })
+		local function bar(from, to, thickness)
+			local delta = to - from
+			local mid = (from + to) / 2
+			piece(
+				model,
+				origin,
+				Vector3.new(mid.X, mid.Y, 0),
+				Vector3.new(delta.Magnitude + thickness * 0.9, thickness, 1.2),
+				yellow,
+				{ Rotation = CFrame.Angles(0, 0, math.atan2(delta.Y, delta.X)), Material = Enum.Material.Neon }
+			)
+		end
+		bar(Vector3.new(2.2, 5.2, 0), Vector3.new(-1.2, 0.8, 0), 2.2) -- tramo de arriba
+		bar(Vector3.new(-2.6, 0.4, 0), Vector3.new(2.6, 0.4, 0), 2) -- travesaño
+		bar(Vector3.new(1.2, -0.2, 0), Vector3.new(-2.2, -5.4, 0), 2.2) -- punta de abajo
 	elseif kind == "Capacity" then
 		-- Mochila: cuerpo morado, bolsillo, correas y gemita.
 		local purple = c(150, 110, 230)
